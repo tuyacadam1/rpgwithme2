@@ -5,28 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Idle Tower Gacha RPG</title>
   <link rel="stylesheet" href="style.css">
-  <style>
-    /* Floating Damage Numbers for Idle Combat */
-    .dmg-popup {
-      position: absolute; top: 10px; font-weight: 900; font-size: 16px;
-      color: #fbbf24; text-shadow: 0 2px 4px #000; pointer-events: none;
-      animation: floatDmg 0.75s ease-out forwards; z-index: 20;
-    }
-    @keyframes floatDmg {
-      0% { opacity: 1; transform: translateY(0) scale(1); }
-      100% { opacity: 0; transform: translateY(-38px) scale(1.25); }
-    }
-    .idle-badge {
-      display: inline-flex; align-items: center; gap: 6px;
-      background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981;
-      color: #34d399; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 800;
-    }
-    .pulse-dot {
-      width: 8px; height: 8px; border-radius: 50%; background: #10b981;
-      animation: pulseDot 1s infinite;
-    }
-    @keyframes pulseDot { 50% { opacity: 0.2; } }
-  </style>
 </head>
 <body>
   <div id="toast">Saved!</div>
@@ -57,7 +35,7 @@
     </header>
 
     <div class="game-body">
-      <!-- LEFT / TOP: IDLE TOWER ARENA (PRIMARY VIEW) & GACHA -->
+      <!-- LEFT / TOP: IDLE TOWER ARENA & GACHA -->
       <div class="hero-stage-col" style="display:flex; flex-direction:column; gap:12px;">
         
         <!-- IDLE AUTO-BATTLE TOWER ARENA -->
@@ -70,10 +48,10 @@
           <div class="arena-hud">
             <div class="hp-box">
               <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:700;">
-                <span id="arena-hero-name">Hero</span>
+                <span id="arena-hero-name">No Hero</span>
                 <span style="color:var(--gold);" id="arena-hero-cp">0 CP</span>
               </div>
-              <div class="hp-bar-track"><div class="hp-bar-fill" id="hero-hp-bar" style="width:100%;"></div></div>
+              <div class="hp-bar-track"><div class="hp-bar-fill" id="hero-hp-bar" style="width:0%;"></div></div>
             </div>
 
             <div class="hp-box">
@@ -96,13 +74,12 @@
             </div>
           </div>
 
-          <!-- IDLE MODE CONTROLS -->
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
             <button class="gacha-btn" id="auto-climb-btn" style="background:#059669;" onclick="toggleAutoClimb()">🔄 Auto-Climb: ON</button>
             <button class="gacha-btn" style="background:#1e293b; border:1px solid #475569;" onclick="toggleIdlePause()" id="pause-idle-btn">⏸️ Pause Idle</button>
           </div>
           <div id="raid-result" style="margin-top:8px; font-size:12px; text-align:center; font-weight:700; min-height:18px; color:#e2e8f0;">
-            Auto-battling floor enemies...
+            Roll the Gacha Banner below to summon a hero!
           </div>
         </div>
 
@@ -126,7 +103,6 @@
       <!-- RIGHT / BOTTOM: EQUIPPED GEAR (5 SLOTS) & STAT UPGRADES -->
       <div class="control-col" style="display:flex; flex-direction:column; gap:12px;">
         
-        <!-- HERO PAPER-DOLL & 5 GEAR SLOTS -->
         <div class="hero-stage">
           <div class="slot-col">
             <div class="gear-slot" id="slot-head" onclick="openArmory('head')"></div>
@@ -146,7 +122,6 @@
           </div>
         </div>
 
-        <!-- STAT ALLOCATION (SHARES SAME CLASS POINTS) -->
         <div class="rpg-card" id="panel-stats">
           <div class="card-title">
             <span>📊 Stat Upgrade (1 Pt each)</span>
