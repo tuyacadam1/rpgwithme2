@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Student Tower RPG</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="toast">Saving to Cloud...</div>
+
+  <!-- STUDENT ID LOGIN -->
+  <div id="login-view" class="main-content" style="max-width: 400px; margin: auto; display: flex; flex-direction: column; justify-content: center;">
+    <div class="card" style="text-align:center;">
+      <h2>⚔️ Tower Adventurer</h2>
+      <p style="font-size:13px; color:var(--muted); margin-bottom:14px;">Enter your Student ID to load your hero</p>
+      <input type="text" id="s-id" placeholder="Student ID (e.g., 2026001)">
+      <button class="btn" onclick="loginStudent()">Enter World</button>
+    </div>
+  </div>
+
+  <!-- CHARACTER CREATION MODAL (First Login) -->
+  <div id="char-create-view" class="main-content hidden" style="max-width: 420px; margin: auto;">
+    <div class="card" style="text-align:center;">
+      <h3>Create Your Hero</h3>
+      <div id="avatar-preview" style="font-size: 64px; margin: 16px 0; padding: 20px; background:#0f172a; border-radius:12px;">🧑🏽</div>
+      <div class="grid-2">
+        <button class="btn" onclick="selectGender('Male')">♂️ Male</button>
+        <button class="btn" onclick="selectGender('Female')">♀️ Female</button>
+      </div>
+      <label style="display:block; margin-top:12px; font-size:12px;">Aura / Outfit Color</label>
+      <input type="color" id="avatar-color" value="#3b82f6" onchange="updatePreview()">
+      <button class="btn btn-gold" style="margin-top:10px;" onclick="confirmCharacter()">Start Adventure</button>
+    </div>
+  </div>
+
+  <!-- MAIN RPG SHELL -->
+  <div id="app-shell" class="app-container hidden">
+    <nav class="nav-bar">
+      <button class="nav-btn active" onclick="switchTab('stats', this)"><span class="icon">📊</span>Stats</button>
+      <button class="nav-btn" onclick="switchTab('equip', this)"><span class="icon">🛡️</span>Equip (5)</button>
+      <button class="nav-btn" onclick="switchTab('tower', this)"><span class="icon">🗼</span>Tower Raid</button>
+      <button class="nav-btn" style="color:#4ade80;" onclick="syncToCloud()"><span class="icon">☁️</span>Save</button>
+    </nav>
+
+    <main class="main-content">
+      <!-- HEADER BAR -->
+      <div class="card" style="display:flex; align-items:center; justify-content:space-between; padding:12px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div id="hud-avatar" style="font-size:32px; padding:6px; border-radius:8px; background:#0f172a;">🧑🏽</div>
+          <div>
+            <b id="hud-name">Student</b>
+            <div style="font-size:12px; color:var(--gold);">Floor <span id="hud-floor">1</span> | CP: <span id="hud-cp">0</span></div>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <span style="font-size:11px; color:var(--muted);">Stat Points</span>
+          <div style="font-size:18px; font-weight:bold; color:var(--accent);" id="hud-points">0</div>
+        </div>
+      </div>
+
+      <!-- 1. STATS ALLOCATION -->
+      <section id="tab-stats" class="tab-view">
+        <div class="card">
+          <h3>Attribute Points</h3>
+          <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">Earn points from class tasks and upgrade your hero!</p>
+          <div id="stats-list"></div>
+        </div>
+      </section>
+
+      <!-- 2. EQUIPMENT (MAX 5 SLOTS, NO DUPLICATES) -->
+      <section id="tab-equip" class="tab-view hidden">
+        <div class="card">
+          <h3>Equipped Gear (5 Parts)</h3>
+          <div class="equip-grid" id="equipped-slots"></div>
+        </div>
+        <div class="card">
+          <h3>Armory (Unique Drops Only)</h3>
+          <div id="inventory-list"></div>
+        </div>
+      </section>
+
+      <!-- 3. INFINITE TOWER RAID -->
+      <section id="tab-tower" class="tab-view hidden">
+        <div class="card" style="text-align:center;">
+          <h3 id="tower-title">Floor 1 - Goblin Scout</h3>
+          <div id="enemy-sprite" style="font-size:60px; margin:14px 0;">👺</div>
+          <p style="font-size:13px; margin-bottom:6px;">Recommended Power: <b id="enemy-power" style="color:#f87171;">20</b></p>
+          <p style="font-size:12px; color:var(--muted); margin-bottom:14px;">Every 10th floor is a Boss with high Legendary drop rates!</p>
+          <button class="btn btn-gold" onclick="battleFloor()">⚔️ Challenge Floor</button>
+          <div id="battle-log" style="margin-top:14px; font-size:13px; min-height:40px;"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="student.js"></script>
+</body>
+</html>
