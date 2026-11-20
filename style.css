@@ -43,7 +43,12 @@ body { background: radial-gradient(circle at top, #172033 0%, var(--bg-dark) 80%
 .rarity-Epic { border-color: var(--epic) !important; box-shadow: 0 0 12px rgba(192, 132, 252, 0.35); }
 .rarity-Legendary { border-color: var(--legendary) !important; box-shadow: 0 0 15px rgba(251, 191, 36, 0.5); }
 
-/* ANIMATED SPRITE SHEET BOX */
+/* CRISP SPRITE SHEET RENDERING */
+.sprite-frame, .arena-sprite, .char-thumb {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+}
+
 .character-center { display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .sprite-frame {
   width: 145px; height: 145px; background-repeat: no-repeat; z-index: 2;
@@ -55,12 +60,20 @@ body { background: radial-gradient(circle at top, #172033 0%, var(--bg-dark) 80%
   border: 1px solid rgba(56, 189, 248, 0.45);
 }
 
-/* MISCRITS-STYLE SIDE-BY-SIDE TOWER ARENA */
+/* IDLE TOWER BATTLE ARENA */
 .miscrits-arena {
   position: relative; border-radius: 16px; overflow: hidden;
   background: linear-gradient(180deg, #1e1b4b 0%, #312e81 48%, #14532d 52%, #052e16 100%);
   border: 2px solid #4c1d95; padding: 14px 10px;
 }
+.idle-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981;
+  color: #34d399; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 800;
+}
+.pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; animation: pulseDot 1s infinite; }
+@keyframes pulseDot { 50% { opacity: 0.2; } }
+
 .arena-hud { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
 .hp-box { flex: 1; background: rgba(9, 13, 22, 0.85); border: 1px solid #475569; border-radius: 10px; padding: 6px 8px; }
 .hp-bar-track { width: 100%; height: 8px; background: #1f2937; border-radius: 4px; overflow: hidden; margin-top: 4px; }
@@ -81,6 +94,16 @@ body { background: radial-gradient(circle at top, #172033 0%, var(--bg-dark) 80%
 .lunge-right { transform: translateX(48px) scale(1.1); transition: transform 0.2s; }
 .lunge-left { transform: translateX(-48px) scale(1.1); transition: transform 0.2s; }
 .hit-flash { filter: brightness(3) drop-shadow(0 0 12px red) !important; }
+
+.dmg-popup {
+  position: absolute; top: 10px; font-weight: 900; font-size: 16px;
+  color: #fbbf24; text-shadow: 0 2px 4px #000; pointer-events: none;
+  animation: floatDmg 0.75s ease-out forwards; z-index: 20;
+}
+@keyframes floatDmg {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-38px) scale(1.25); }
+}
 
 /* GACHA BANNER & ROSTER */
 .gacha-banner {
