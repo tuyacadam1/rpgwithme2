@@ -2,30 +2,29 @@ const API_URL = "https://script.google.com/macros/s/AKfycbxPN7yKyqOwyyxIarj2BTkI
 
 let hero = null;
 let hasUnsaved = false;
-let isBattling = false;
 let animFrame = 0;
-let heroAnimRow = 0; // 0 = Idle (Row 1), 1 = Attack (Row 2), 2 = Ultimate (Row 3)
+let heroAnimRow = 0; // 0 = Idle, 1 = Slash, 2 = Ultimate
+
+// Idle Combat State
+let idlePaused = false;
+let autoClimb = true;
+let heroHP = 100;
+let heroMaxHP = 100;
+let enemyHP = 100;
+let enemyMaxHP = 100;
+let idleTurn = 'hero';
 
 const RARITY_MULT = { Common: 1.0, Rare: 1.2, Epic: 1.5, Legendary: 2.0 };
 
-const DEFAULT_HERO = {
-  assetId: 'default_novice',
-  type: 'character',
-  rarity: 'Common',
-  name: 'Novice Knight',
-  imageData: "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160"><circle cx="80" cy="40" r="20" fill="#fde68a"/><rect x="58" y="64" width="44" height="54" rx="8" fill="#2563eb"/><rect x="62" y="118" width="14" height="34" rx="4" fill="#1e293b"/><rect x="84" y="118" width="14" height="34" rx="4" fill="#1e293b"/><rect x="110" y="25" width="7" height="85" rx="3" fill="#38bdf8"/></svg>`),
+const FALLBACK_MOB = {
+  name: 'Tower Guardian',
+  imageData: "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160"><ellipse cx="80" cy="90" rx="46" ry="40" fill="#16a34a"/><circle cx="64" cy="80" r="7" fill="#fef08a"/><circle cx="96" cy="80" r="7" fill="#fef08a"/></svg>`),
   meta: { cols: 1, rows: 1 }
 };
 
-const DEFAULT_MOB = {
-  name: 'Tower Goblin',
-  imageData: "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160"><ellipse cx="80" cy="90" rx="48" ry="42" fill="#16a34a"/><circle cx="64" cy="80" r="7" fill="#fef08a"/><circle cx="96" cy="80" r="7" fill="#fef08a"/></svg>`),
-  meta: { cols: 1, rows: 1 }
-};
-
-const DEFAULT_BOSS = {
-  name: 'Tower Dragon Boss',
-  imageData: "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160"><ellipse cx="80" cy="92" rx="55" ry="48" fill="#7f1d1d" stroke="#fbbf24" stroke-width="4"/><circle cx="62" cy="80" r="9" fill="#fbbf24"/><circle cx="98" cy="80" r="9" fill="#fbbf24"/></svg>`),
+const FALLBACK_BOSS = {
+  name: 'Floor Overlord',
+  imageData: "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160"><ellipse cx="80" cy="92" rx="54" ry="46" fill="#7f1d1d" stroke="#fbbf24" stroke-width="4"/><circle cx="62" cy="80" r="9" fill="#fbbf24"/><circle cx="98" cy="80" r="9" fill="#fbbf24"/></svg>`),
   meta: { cols: 1, rows: 1 }
 };
 
@@ -42,7 +41,7 @@ const LOOT_TABLE = [
   { id: 'ac_crown', slot: 'accessory', icon: '💎', name: 'Heart of the Tower', rarity: 'Legendary', power: 75 }
 ];
 
-// --- 1. LOGIN & SPRITE LOOP ENGINE ---
+// --- 1. LOGIN & AUTO-STARTER GACHA HERO ---
 async function loginStudent() {
   const studentId = document.getElementById('student-id-input').value.trim();
   if (!studentId) return alert("Enter your Student ID.");
@@ -61,10 +60,22 @@ async function loginStudent() {
       hero.avatar = { unlockedChars: [], equippedChar: null };
     }
 
+    // Give student their first Gacha character from the teacher's pool automatically if they have 0 unlocked
+    const charPool = (hero.assets || []).filter(a => a.type === 'character');
+    if (hero.avatar.unlockedChars.length === 0 && charPool.length > 0) {
+      const commons = charPool.filter(c => c.rarity === 'Common');
+      const starter = commons.length > 0 ? commons[0] : charPool[0];
+      hero.avatar.unlockedChars.push({ id: starter.assetId, stars: 1 });
+      hero.avatar.equippedChar = starter.assetId;
+      hasUnsaved = true;
+    }
+
     document.getElementById('login-screen').classList.add('hidden');
     document.getElementById('game-screen').classList.remove('hidden');
 
+    resetCombatRound();
     startSpriteAnimationLoop();
+    startIdleCombatLoop();
     renderAll();
     hideToast();
   } catch (err) {
@@ -74,14 +85,19 @@ async function loginStudent() {
 }
 
 function getEquippedCharacterObj() {
+  const charPool = (hero.assets || []).filter(a => a.type === 'character');
   if (hero.avatar.equippedChar) {
-    const found = (hero.assets || []).find(a => a.assetId === hero.avatar.equippedChar);
+    const found = charPool.find(a => a.assetId === hero.avatar.equippedChar);
     if (found) return found;
   }
-  return DEFAULT_HERO;
+  if (charPool.length > 0) return charPool[0];
+  return {
+    assetId: 'none', rarity: 'Common', name: 'Roll Gacha to Summon!',
+    imageData: FALLBACK_MOB.imageData, meta: { cols: 1, rows: 1 }
+  };
 }
 
-// Smooth 60fps-friendly sprite sheet frame stepper for Idle (Row 1) & Attack (Row 2/3)
+// --- 2. SPRITE SHEET ANIMATION LOOP ---
 function startSpriteAnimationLoop() {
   setInterval(() => {
     animFrame++;
@@ -91,7 +107,7 @@ function startSpriteAnimationLoop() {
     applySpriteFrame(document.getElementById('stage-hero-sprite'), charObj, animFrame, 0);
     applySpriteFrame(document.getElementById('arena-hero-sprite'), charObj, animFrame, heroAnimRow);
     applySpriteFrame(document.getElementById('arena-enemy-sprite'), enemyObj, animFrame, 0);
-  }, 135);
+  }, 130);
 }
 
 function applySpriteFrame(el, asset, frameIdx, targetRow) {
@@ -108,7 +124,143 @@ function applySpriteFrame(el, asset, frameIdx, targetRow) {
   el.style.backgroundPosition = `${xPct}% ${yPct}%`;
 }
 
-// --- 2. GACHA SYSTEM (USES SAME CLASS POINTS POOL) ---
+// --- 3. CONTINUOUS IDLE TOWER AUTO-BATTLE ENGINE ---
+function resetCombatRound() {
+  const enemy = getFloorEnemy(hero.towerFloor);
+  heroMaxHP = getTotalCP() * 3;
+  heroHP = heroMaxHP;
+  enemyMaxHP = enemy.reqCP * 3;
+  enemyHP = enemyMaxHP;
+  idleTurn = 'hero';
+  updateHPBars();
+}
+
+function updateHPBars() {
+  const hPct = Math.max(0, Math.min(100, (heroHP / heroMaxHP) * 100));
+  const ePct = Math.max(0, Math.min(100, (enemyHP / enemyMaxHP) * 100));
+  document.getElementById('hero-hp-bar').style.width = hPct + '%';
+  document.getElementById('enemy-hp-bar').style.width = ePct + '%';
+}
+
+function spawnFloatingDamage(containerId, dmg, color) {
+  const box = document.getElementById(containerId);
+  const tag = document.createElement('div');
+  tag.className = 'dmg-popup';
+  tag.style.color = color;
+  tag.innerText = `-${dmg.toLocaleString()}`;
+  box.appendChild(tag);
+  setTimeout(() => tag.remove(), 750);
+}
+
+function startIdleCombatLoop() {
+  setInterval(() => {
+    if (idlePaused || !hero) return;
+
+    const enemy = getFloorEnemy(hero.towerFloor);
+    const myCP = getTotalCP();
+    const heroSprite = document.getElementById('arena-hero-sprite');
+    const enemySprite = document.getElementById('arena-enemy-sprite');
+    const resBox = document.getElementById('raid-result');
+
+    if (idleTurn === 'hero') {
+      // Hero auto-attacks!
+      const isCrit = Math.random() < 0.25;
+      const dmg = Math.floor(myCP * (isCrit ? 1.5 : 1.0));
+      heroAnimRow = isCrit ? 2 : 1; // Plays Row 2 Slash or Row 3 Ultimate!
+      heroSprite.classList.add('lunge-right');
+
+      setTimeout(() => {
+        enemySprite.classList.add('hit-flash');
+        enemyHP -= dmg;
+        spawnFloatingDamage('combatant-enemy', dmg, isCrit ? '#fbbf24' : '#ffffff');
+        updateHPBars();
+      }, 180);
+
+      setTimeout(() => {
+        heroAnimRow = 0; // Return to Row 1 Idle
+        heroSprite.classList.remove('lunge-right');
+        enemySprite.classList.remove('hit-flash');
+
+        if (enemyHP <= 0) {
+          handleIdleVictory(enemy);
+        } else {
+          idleTurn = 'enemy';
+        }
+      }, 480);
+
+    } else {
+      // Enemy auto-attacks back!
+      const enemyDmg = Math.floor(enemy.reqCP * 0.95);
+      enemySprite.classList.add('lunge-left');
+
+      setTimeout(() => {
+        heroSprite.classList.add('hit-flash');
+        heroHP -= enemyDmg;
+        spawnFloatingDamage('combatant-hero', enemyDmg, '#f87171');
+        updateHPBars();
+      }, 180);
+
+      setTimeout(() => {
+        enemySprite.classList.remove('lunge-left');
+        heroSprite.classList.remove('hit-flash');
+
+        if (heroHP <= 0) {
+          // Defeated on current floor -> auto-respawn and keep idling!
+          resBox.innerHTML = `<span style="color:#f87171;">⚠️ Enemy too strong! Respawning to keep idle farming...</span>`;
+          resetCombatRound();
+        } else {
+          idleTurn = 'hero';
+        }
+      }, 480);
+    }
+  }, 1150);
+}
+
+function handleIdleVictory(enemy) {
+  const resBox = document.getElementById('raid-result');
+  
+  // Advance floor only if Auto-Climb is ON
+  if (autoClimb) {
+    hero.towerFloor++;
+    hasUnsaved = true;
+  }
+
+  // Roll rarity loot
+  const roll = Math.random() * 100;
+  let rarity = 'Common';
+  if (enemy.isBoss) rarity = roll < 30 ? 'Legendary' : roll < 75 ? 'Epic' : 'Rare';
+  else rarity = roll < 4 ? 'Legendary' : roll < 18 ? 'Epic' : roll < 50 ? 'Rare' : 'Common';
+
+  const pool = LOOT_TABLE.filter(i => i.rarity === rarity);
+  const drop = pool[Math.floor(Math.random() * pool.length)];
+
+  const exists = hero.inventory.some(i => i.id === drop.id);
+  if (!exists) {
+    hero.inventory.push(drop);
+    hasUnsaved = true;
+    resBox.innerHTML = `<span style="color:#4ade80;">🎉 Cleared! Found [${drop.rarity}] ${drop.name}!</span>`;
+  } else {
+    resBox.innerHTML = `<span style="color:#38bdf8;">⚔️ Cleared! Advancing to Floor ${hero.towerFloor}...</span>`;
+  }
+
+  if (enemy.isBoss) syncProgress();
+  resetCombatRound();
+  renderAll();
+}
+
+function toggleAutoClimb() {
+  autoClimb = !autoClimb;
+  const btn = document.getElementById('auto-climb-btn');
+  btn.innerText = autoClimb ? '🔄 Auto-Climb: ON' : '🔁 Farm Current Floor';
+  btn.style.background = autoClimb ? '#059669' : '#d97706';
+}
+
+function toggleIdlePause() {
+  idlePaused = !idlePaused;
+  document.getElementById('pause-idle-btn').innerText = idlePaused ? '▶️ Resume Idle' : '⏸️ Pause Idle';
+}
+
+// --- 4. GACHA SYSTEM (SHARES SAME CLASS POINTS POOL) ---
 function rollGacha(count) {
   const cost = count === 5 ? 22 : 5;
   if (hero.unspentPoints < cost) return alert(`Need ${cost} Class Points to summon!`);
@@ -128,10 +280,9 @@ function rollGacha(count) {
     else if (roll < 50) rarity = 'Rare';
 
     let candidates = charPool.filter(c => c.rarity === rarity);
-    if (candidates.length === 0) candidates = charPool; // Fallback if teacher only uploaded 1 rarity
+    if (candidates.length === 0) candidates = charPool;
     const pulled = candidates[Math.floor(Math.random() * candidates.length)];
 
-    // Check if already unlocked -> increment Star level on duplicates!
     const existing = hero.avatar.unlockedChars.find(u => u.id === pulled.assetId);
     if (existing) {
       existing.stars = (existing.stars || 1) + 1;
@@ -141,7 +292,7 @@ function rollGacha(count) {
       pullResults.push(`NEW! [${pulled.rarity}] ${pulled.name}`);
     }
 
-    // Auto-equip if student was still using the default knight
+    // Automatically deploy newly pulled hero if none equipped
     if (!hero.avatar.equippedChar) {
       hero.avatar.equippedChar = pulled.assetId;
     }
@@ -150,31 +301,35 @@ function rollGacha(count) {
   document.getElementById('gacha-result-log').innerHTML =
     `<span style="color:#e879f9;">🎉 ${pullResults.join(' • ')}</span>`;
 
+  resetCombatRound();
   renderAll();
 }
 
 function equipCharacter(assetId) {
   hero.avatar.equippedChar = assetId;
   hasUnsaved = true;
+  resetCombatRound();
   renderAll();
 }
 
 function renderUnlockedCharacters() {
   const row = document.getElementById('unlocked-chars-row');
-  const cards = [
-    { id: null, stars: 1, asset: DEFAULT_HERO },
-    ...hero.avatar.unlockedChars.map(u => ({
-      id: u.id,
-      stars: u.stars || 1,
-      asset: (hero.assets || []).find(a => a.assetId === u.id)
-    })).filter(x => x.asset)
-  ];
+  const cards = hero.avatar.unlockedChars.map(u => ({
+    id: u.id,
+    stars: u.stars || 1,
+    asset: (hero.assets || []).find(a => a.assetId === u.id)
+  })).filter(x => x.asset);
+
+  if (cards.length === 0) {
+    row.innerHTML = `<div style="font-size:12px; color:var(--gold); padding:8px;">No characters yet — click Summon above to pull your hero!</div>`;
+    return;
+  }
 
   row.innerHTML = cards.map(c => {
     const a = c.asset;
     const isSelected = hero.avatar.equippedChar === c.id;
     return `
-      <div class="char-card rarity-${a.rarity} ${isSelected ? 'active' : ''}" onclick="equipCharacter(${c.id ? `'${c.id}'` : 'null'})">
+      <div class="char-card rarity-${a.rarity} ${isSelected ? 'active' : ''}" onclick="equipCharacter('${c.id}')">
         <div class="char-thumb" style="background-image:url(${a.imageData}); background-size:${a.meta.cols * 100}% ${a.meta.rows * 100}%; background-position:0% 0%;"></div>
         <div style="font-size:10px; font-weight:800; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${a.name}</div>
         <div style="font-size:9px; color:var(--gold);">★${c.stars} (${RARITY_MULT[a.rarity]}x)</div>
@@ -183,7 +338,7 @@ function renderUnlockedCharacters() {
   }).join('');
 }
 
-// --- 3. COMBAT POWER & STATS (USES SAME CLASS POINTS POOL) ---
+// --- 5. COMBAT POWER & STATS ---
 function getTotalCP() {
   const s = hero.stats;
   let base = (s.str * 15) + (s.agi * 12) + (s.vit * 12) + (s.int * 15);
@@ -191,7 +346,6 @@ function getTotalCP() {
     if (item) base += (item.power * 10);
   });
 
-  // Apply Gacha Character Rarity & Star Awakening Multiplier!
   const charObj = getEquippedCharacterObj();
   const unlockedEntry = hero.avatar.unlockedChars.find(u => u.id === charObj.assetId);
   const stars = unlockedEntry ? unlockedEntry.stars : 1;
@@ -229,7 +383,7 @@ function upgradeStat(key) {
   renderAll();
 }
 
-// --- 4. 5-SLOT GEAR & ARMORY (NO DUPLICATES) ---
+// --- 6. 5-SLOT GEAR & ARMORY ---
 function renderSlots() {
   const slotDefs = [
     { key: 'head', defIcon: '🪖', label: 'Head' },
@@ -268,7 +422,7 @@ function openArmory(slotFilter) {
       </div>
       <button class="plus-btn" onclick="equipGear('${item.id}')">EQUIP</button>
     </div>
-  `).join('') || '<p style="text-align:center; color:var(--muted); padding:20px;">No gear unlocked yet. Raid the Tower!</p>';
+  `).join('') || '<p style="text-align:center; color:var(--muted); padding:20px;">No gear unlocked yet. Let your hero idle in the Tower!</p>';
 
   modal.classList.remove('hidden');
 }
@@ -284,7 +438,7 @@ function equipGear(itemId) {
   renderAll();
 }
 
-// --- 5. INFINITE TOWER RAID (SPRITE SHEET ATTACK ANIMATION) ---
+// --- 7. FLOOR ENEMY LOOKUP & RENDER ---
 function getFloorEnemy(floor) {
   const isBoss = floor % 10 === 0;
   const reqCP = Math.floor(250 * Math.pow(1.15, floor - 1));
@@ -298,7 +452,7 @@ function getFloorEnemy(floor) {
   return {
     isBoss,
     reqCP,
-    asset: chosen || (isBoss ? DEFAULT_BOSS : DEFAULT_MOB)
+    asset: chosen || (isBoss ? FALLBACK_BOSS : FALLBACK_MOB)
   };
 }
 
@@ -309,74 +463,8 @@ function renderArena() {
   document.getElementById('arena-hero-cp').innerText = getTotalCP().toLocaleString() + " CP";
   document.getElementById('arena-enemy-name').innerText = enemy.asset.name;
   document.getElementById('arena-enemy-cp').innerText = enemy.reqCP.toLocaleString() + " CP";
-
-  document.getElementById('hero-hp-bar').style.width = '100%';
-  document.getElementById('enemy-hp-bar').style.width = '100%';
 }
 
-function battleTower() {
-  if (isBattling) return;
-  isBattling = true;
-
-  const enemy = getFloorEnemy(hero.towerFloor);
-  const myCP = getTotalCP();
-  const heroSprite = document.getElementById('arena-hero-sprite');
-  const enemySprite = document.getElementById('arena-enemy-sprite');
-  const resBox = document.getElementById('raid-result');
-
-  // Trigger Row 2 (Attack) or Row 3 (Ultimate on Boss floors) of the sprite sheet!
-  heroAnimRow = enemy.isBoss ? 2 : 1;
-  heroSprite.classList.add('lunge-right');
-
-  setTimeout(() => {
-    enemySprite.classList.add('hit-flash');
-    document.getElementById('enemy-hp-bar').style.width = myCP >= enemy.reqCP ? '0%' : '65%';
-  }, 250);
-
-  setTimeout(() => {
-    heroAnimRow = 0; // Return to Row 1 Idle loop
-    heroSprite.classList.remove('lunge-right');
-    enemySprite.classList.remove('hit-flash');
-
-    if (myCP >= enemy.reqCP) {
-      hero.towerFloor++;
-      hasUnsaved = true;
-
-      const roll = Math.random() * 100;
-      let rarity = 'Common';
-      if (enemy.isBoss) rarity = roll < 30 ? 'Legendary' : roll < 75 ? 'Epic' : 'Rare';
-      else rarity = roll < 4 ? 'Legendary' : roll < 18 ? 'Epic' : roll < 50 ? 'Rare' : 'Common';
-
-      const pool = LOOT_TABLE.filter(i => i.rarity === rarity);
-      const drop = pool[Math.floor(Math.random() * pool.length)];
-
-      const exists = hero.inventory.some(i => i.id === drop.id);
-      if (!exists) {
-        hero.inventory.push(drop);
-        resBox.innerHTML = `<span style="color:#4ade80;">🎉 VICTORY! Dropped [${drop.rarity}] ${drop.name}!</span>`;
-      } else {
-        resBox.innerHTML = `<span style="color:#fbbf24;">⚔️ VICTORY! Floor Cleared! (Duplicate ${drop.name} converted)</span>`;
-      }
-
-      renderAll();
-      if (enemy.isBoss) syncProgress();
-    } else {
-      enemySprite.classList.add('lunge-left');
-      setTimeout(() => {
-        heroSprite.classList.add('hit-flash');
-        document.getElementById('hero-hp-bar').style.width = '10%';
-      }, 200);
-      setTimeout(() => {
-        enemySprite.classList.remove('lunge-left');
-        heroSprite.classList.remove('hit-flash');
-        resBox.innerHTML = `<span style="color:#f87171;">💀 Defeated! Need ${(enemy.reqCP - myCP).toLocaleString()} more CP.</span>`;
-      }, 500);
-    }
-    isBattling = false;
-  }, 700);
-}
-
-// --- 6. MASTER RENDER & CLOUD SYNC ---
 function renderAll() {
   const charObj = getEquippedCharacterObj();
   document.getElementById('hud-name').innerText = hero.name;
