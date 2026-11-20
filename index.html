@@ -25,12 +25,15 @@
   <div id="game-screen" class="hidden" style="display:flex; flex-direction:column; height:100dvh;">
     <header class="rpg-header">
       <div>
-        <div style="font-weight:800; font-size:14px;" id="hud-name">Student Name</div>
+        <div style="font-weight:800; font-size:14px;">
+          <span id="hud-name">Student Name</span>
+          <span style="background:#1d4ed8; color:#fff; font-size:10px; padding:2px 7px; border-radius:10px; margin-left:4px;">LV. <span id="hud-level">1</span></span>
+        </div>
         <div style="font-size:11px; color:#60a5fa;">ID: <span id="hud-id">---</span> • FLOOR <span id="hud-floor">1</span></div>
       </div>
       <div style="text-align:right;">
         <div class="cp-val"><span id="hud-cp">0</span> CP</div>
-        <div class="pts-pill">★ <span id="hud-pts">0</span> Class Points</div>
+        <div class="pts-pill">★ <span id="hud-pts">0</span> Gacha Points</div>
       </div>
     </header>
 
@@ -87,7 +90,7 @@
         <div class="gacha-banner" id="panel-gacha">
           <div class="card-title" style="color:#e879f9;">
             <span>🎰 Character Gacha Summon</span>
-            <span>Points: <b id="gacha-pts-display">0</b></span>
+            <span>Class Points: <b id="gacha-pts-display">0</b></span>
           </div>
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
             <button class="gacha-btn" id="roll-1-btn" onclick="rollGacha(1)">✨ Summon x1 (5 Pts)</button>
@@ -100,9 +103,10 @@
         </div>
       </div>
 
-      <!-- RIGHT / BOTTOM: EQUIPPED GEAR (5 SLOTS) & STAT UPGRADES -->
+      <!-- RIGHT / BOTTOM: GEAR, EXP LEVELING & TOWER RAID LEADERBOARD -->
       <div class="control-col" style="display:flex; flex-direction:column; gap:12px;">
         
+        <!-- HERO STAGE & 5 GEAR SLOTS -->
         <div class="hero-stage">
           <div class="slot-col">
             <div class="gear-slot" id="slot-head" onclick="openArmory('head')"></div>
@@ -122,21 +126,40 @@
           </div>
         </div>
 
+        <!-- TOWER EXP & AUTO-LEVEL UP STATS -->
         <div class="rpg-card" id="panel-stats">
           <div class="card-title">
-            <span>📊 Stat Upgrade (1 Pt each)</span>
-            <span style="color:#38bdf8;">Available: <span id="panel-pts">0</span> Pts</span>
+            <span>⚡ Hero Level <span id="panel-level">1</span> (Auto-Stats)</span>
+            <span style="color:#38bdf8;">EXP: <span id="exp-text">0 / 100</span></span>
+          </div>
+          <div class="stat-bar-bg" style="height:10px; margin-bottom:12px; border:1px solid #334155;">
+            <div class="stat-bar-fill" id="exp-bar-fill" style="width:0%; background:linear-gradient(90deg, #3b82f6, #38bdf8);"></div>
           </div>
           <div id="stat-rows"></div>
+          <div style="font-size:10px; color:var(--muted); text-align:center; margin-top:4px;">
+            Clear Tower Floors to earn EXP & level up all stats automatically!
+          </div>
         </div>
+
+        <!-- TOWER RAID LEADERBOARD (VISIBLE ON SCREEN) -->
+        <div class="rpg-card" id="panel-leaderboard">
+          <div class="card-title">
+            <span>🏆 Tower Raid Leaderboard</span>
+            <button class="plus-btn" style="padding:2px 8px; font-size:10px;" onclick="loadLeaderboard()">🔄 Refresh</button>
+          </div>
+          <div id="leaderboard-list" style="max-height:240px; overflow-y:auto;">
+            <p style="font-size:12px; color:var(--muted); text-align:center; padding:10px;">Loading class rankings...</p>
+          </div>
+        </div>
+
       </div>
     </div>
 
     <nav class="bottom-nav">
-      <button class="nav-item active" onclick="focusSection('panel-tower', this)"><span class="nav-icon">⚔️</span>Idle Tower</button>
+      <button class="nav-item active" onclick="focusSection('panel-tower', this)"><span class="nav-icon">⚔️</span>Tower</button>
       <button class="nav-item" onclick="focusSection('panel-gacha', this)"><span class="nav-icon">🎰</span>Gacha</button>
-      <button class="nav-item" onclick="openArmory('all')"><span class="nav-icon">🎒</span>Gear (5)</button>
-      <button class="nav-item" onclick="focusSection('panel-stats', this)"><span class="nav-icon">📊</span>Stats</button>
+      <button class="nav-item" onclick="openArmory('all')"><span class="nav-icon">🎒</span>Gear</button>
+      <button class="nav-item" onclick="focusSection('panel-leaderboard', this); loadLeaderboard();"><span class="nav-icon">🏆</span>Rank</button>
       <button class="nav-item" style="color:#4ade80;" onclick="syncProgress()"><span class="nav-icon">☁️</span>Sync</button>
     </nav>
   </div>
