@@ -533,6 +533,57 @@ async function syncProgress() {
   }
 }
 
+// --- 8. TOWER RAID LEADERBOARD ---
+async function openLeaderboard() {
+  const modal = document.getElementById('leaderboard-modal');
+  const list = document.getElementById('leaderboard-list');
+  modal.classList.remove('hidden');
+  list.innerHTML = '<p style="text-align:center; color:var(--muted); padding:20px;">Loading Tower Rankings...</p>';
+
+  try {
+    if (hasUnsaved) await syncProgress();
+
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'getLeaderboard', classId: hero.classId })
+    });
+    const json = await res.json();
+    if (json.status === 'error') throw new Error(json.message);
+
+    const ranks = json.data || [];
+    if (ranks.length === 0) {
+      list.innerHTML = '<p style="text-align:center; color:var(--muted); padding:20px;">No raiders ranked yet.</p>';
+      return;
+    }
+
+    list.innerHTML = ranks.map((r, idx) => {
+      const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
+      const isMe = String(r.studentId) === String(hero.studentId);
+      return `
+        <div class="rpg-card" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; ${isMe ? 'border-color:var(--gold); background:rgba(245,158,11,0.12);' : ''}">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div style="font-size:18px; font-weight:900; min-width:32px; text-align:center; color:${idx < 3 ? 'var(--gold)' : 'var(--muted)'};">${medal}</div>
+            <div>
+              <div style="font-weight:800; font-size:13px;">${r.name} ${isMe ? '<span style="color:var(--gold); font-size:10px;">(YOU)</span>' : ''}</div>
+              <div style="font-size:11px; color:#c084fc;">⚔️ ${r.heroName}</div>
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-weight:900; font-size:13px; color:#38bdf8;">FLOOR ${r.floor}</div>
+            <div style="font-size:11px; color:var(--gold);">${Number(r.cp).toLocaleString()} CP</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    list.innerHTML = `<p style="text-align:center; color:#f87171; padding:20px;">Error: ${err.message}</p>`;
+  }
+}
+
+function closeLeaderboard() {
+  document.getElementById('leaderboard-modal').classList.add('hidden');
+}
+
 function showToast(msg, bg) {
   const t = document.getElementById('toast');
   t.innerText = msg; t.style.background = bg; t.style.display = 'block';
