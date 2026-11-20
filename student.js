@@ -2,6 +2,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbxPN7yKyqOwyyxIarj2BTkI
 
 let hero = null;
 let hasUnsaved = false;
+let pointsSpentSinceSync = 0;
 let animFrame = 0;
 let heroAnimRow = 0; // 0 = Idle, 1 = Slash, 2 = Ultimate
 
@@ -59,6 +60,8 @@ async function loginStudent() {
     if (json.status === 'error') throw new Error(json.message);
 
     hero = json.data;
+    pointsSpentSinceSync = 0;
+
     if (!hero.avatar || !Array.isArray(hero.avatar.unlockedChars)) {
       hero.avatar = { unlockedChars: [], equippedChar: null };
     }
@@ -74,6 +77,7 @@ async function loginStudent() {
     resetCombatRound();
     startSpriteAnimationLoop();
     startIdleCombatLoop();
+    startPointsRefreshLoop();
     renderAll();
     hideToast();
   } catch (err) {
@@ -277,6 +281,7 @@ function rollGacha(count) {
   if (charPool.length === 0) return alert("Your teacher hasn't uploaded Gacha Characters yet!");
 
   hero.unspentPoints -= cost;
+  pointsSpentSinceSync += cost;
   hasUnsaved = true;
   const pullResults = [];
 
@@ -387,6 +392,7 @@ function renderStats() {
 function upgradeStat(key) {
   if (hero.unspentPoints <= 0) return;
   hero.unspentPoints--;
+  pointsSpentSinceSync += 1;
   hero.stats[key]++;
   hasUnsaved = true;
   renderAll();
@@ -514,7 +520,7 @@ async function syncProgress() {
         studentId: hero.studentId,
         state: {
           avatar: hero.avatar,
-          unspentPoints: hero.unspentPoints,
+          pointsSpent: pointsSpentSinceSync,
           stats: hero.stats,
           towerFloor: hero.towerFloor,
           equipped: hero.equipped,
@@ -524,7 +530,12 @@ async function syncProgress() {
     });
     const json = await res.json();
     if (json.status === 'error') throw new Error(json.message);
+
+    pointsSpentSinceSync = 0;
+    hero.unspentPoints = Number(json.data.unspentPoints) || 0;
     hasUnsaved = false;
+    renderAll();
+
     showToast("✅ Synced!", "#10b981");
     setTimeout(hideToast, 1500);
   } catch (err) {
@@ -582,6 +593,29 @@ async function openLeaderboard() {
 
 function closeLeaderboard() {
   document.getElementById('leaderboard-modal').classList.add('hidden');
+}
+
+// --- 9. LIVE TEACHER POINTS AUTO-POLLING ---
+function startPointsRefreshLoop() {
+  setInterval(async () => {
+    if (!hero) return;
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'getStudentPoints', studentId: hero.studentId })
+      });
+      const json = await res.json();
+      if (json.status === 'success') {
+        const livePts = Math.max(0, (Number(json.data.unspentPoints) || 0) - pointsSpentSinceSync);
+        if (livePts !== hero.unspentPoints) {
+          hero.unspentPoints = livePts;
+          renderAll();
+          showToast("⭐ New Class Points Received!", "#3b82f6");
+          setTimeout(hideToast, 2500);
+        }
+      }
+    } catch (_) {}
+  }, 15000);
 }
 
 function showToast(msg, bg) {
