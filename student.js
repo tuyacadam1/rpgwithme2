@@ -45,7 +45,7 @@ const LOOT_TABLE = [
   { id: 'ac_crown', slot: 'accessory', icon: '💎', name: 'Heart of the Tower', rarity: 'Legendary', power: 75 }
 ];
 
-// --- 1. LOGIN (NO DEFAULT CHARACTER — PURE GACHA) ---
+// --- 1. LOGIN ---
 async function loginStudent() {
   const studentId = document.getElementById('student-id-input').value.trim();
   if (!studentId) return alert("Enter your Student ID.");
@@ -65,6 +65,8 @@ async function loginStudent() {
     if (!hero.avatar || !Array.isArray(hero.avatar.unlockedChars)) {
       hero.avatar = { unlockedChars: [], equippedChar: null };
     }
+    if (!hero.stats.level) hero.stats.level = 1;
+    if (hero.stats.exp === undefined) hero.stats.exp = 0;
 
     const validIds = new Set(hero.avatar.unlockedChars.map(u => u.id));
     if (!validIds.has(hero.avatar.equippedChar)) {
@@ -79,6 +81,7 @@ async function loginStudent() {
     startIdleCombatLoop();
     startPointsRefreshLoop();
     renderAll();
+    loadLeaderboard();
     hideToast();
   } catch (err) {
     hideToast();
@@ -134,7 +137,35 @@ function applySpriteFrame(el, asset, frameIdx, targetRow) {
   el.style.backgroundPosition = `${xPct}% ${yPct}%`;
 }
 
-// --- 3. CONTINUOUS IDLE TOWER AUTO-BATTLE ---
+// --- 3. EXP & AUTO LEVEL-UP SYSTEM ---
+function getExpNeeded(level) {
+  return Math.floor(100 * Math.pow(1.25, level - 1));
+}
+
+function grantTowerExp(amount) {
+  hero.stats.exp = (Number(hero.stats.exp) || 0) + amount;
+  let leveledUp = false;
+
+  while (hero.stats.exp >= getExpNeeded(hero.stats.level)) {
+    hero.stats.exp -= getExpNeeded(hero.stats.level);
+    hero.stats.level += 1;
+    // Automatically boost all stats on level up and overwrite in-place
+    hero.stats.str += 1;
+    hero.stats.agi += 1;
+    hero.stats.vit += 1;
+    hero.stats.int += 1;
+    leveledUp = true;
+  }
+
+  hasUnsaved = true;
+  if (leveledUp) {
+    showToast(`🎉 LEVEL UP! Hero reached Lv. ${hero.stats.level}!`, "#f59e0b");
+    setTimeout(hideToast, 2200);
+  }
+  return leveledUp;
+}
+
+// --- 4. CONTINUOUS IDLE TOWER AUTO-BATTLE ---
 function resetCombatRound() {
   const enemy = getFloorEnemy(hero.towerFloor);
   heroMaxHP = Math.max(1, getTotalCP() * 3);
@@ -220,7 +251,7 @@ function startIdleCombatLoop() {
         heroSprite.classList.remove('hit-flash');
 
         if (heroHP <= 0) {
-          resBox.innerHTML = `<span style="color:#f87171;">⚠️ Enemy too strong! Respawning to keep idle farming...</span>`;
+          resBox.innerHTML = `<span style="color:#f87171;">⚠️ Enemy too strong! Respawning to keep idle farming EXP...</span>`;
           resetCombatRound();
         } else {
           idleTurn = 'hero';
@@ -232,6 +263,11 @@ function startIdleCombatLoop() {
 
 function handleIdleVictory(enemy) {
   const resBox = document.getElementById('raid-result');
+  const clearedFloor = hero.towerFloor;
+
+  // Award EXP based on floor (Boss floors give 3x EXP)
+  const expGain = (50 + (clearedFloor * 25)) * (enemy.isBoss ? 3 : 1);
+  grantTowerExp(expGain);
 
   if (autoClimb) {
     hero.towerFloor++;
@@ -250,12 +286,17 @@ function handleIdleVictory(enemy) {
   if (!exists) {
     hero.inventory.push(drop);
     hasUnsaved = true;
-    resBox.innerHTML = `<span style="color:#4ade80;">🎉 Cleared! Dropped [${drop.rarity}] ${drop.name}!</span>`;
+    resBox.innerHTML = `<span style="color:#4ade80;">🎉 +${expGain} EXP! Found [${drop.rarity}] ${drop.name}!</span>`;
   } else {
-    resBox.innerHTML = `<span style="color:#38bdf8;">⚔️ Cleared! Advancing to Floor ${hero.towerFloor}...</span>`;
+    resBox.innerHTML = `<span style="color:#38bdf8;">⚔️ +${expGain} EXP! Advancing to Floor ${hero.towerFloor}...</span>`;
   }
 
-  if (enemy.isBoss) syncProgress();
+  // Overwrite save automatically on Boss floors so sheet data stays clean & updated
+  if (enemy.isBoss) {
+    syncProgress();
+    loadLeaderboard();
+  }
+
   resetCombatRound();
   renderAll();
 }
@@ -272,7 +313,7 @@ function toggleIdlePause() {
   document.getElementById('pause-idle-btn').innerText = idlePaused ? '▶️ Resume Idle' : '⏸️ Pause Idle';
 }
 
-// --- 4. GACHA SYSTEM (SHARES SAME CLASS POINTS POOL) ---
+// --- 5. GACHA SYSTEM (USES TEACHER CLASS POINTS) ---
 function rollGacha(count) {
   const cost = count === 5 ? 22 : 5;
   if (hero.unspentPoints < cost) return alert(`Need ${cost} Class Points to summon!`);
@@ -350,7 +391,7 @@ function renderUnlockedCharacters() {
   }).join('');
 }
 
-// --- 5. COMBAT POWER & STATS ---
+// --- 6. COMBAT POWER & AUTO-LEVELING STATS ---
 function getTotalCP() {
   const charObj = getEquippedCharacterObj();
   if (!charObj) return 0;
@@ -369,6 +410,15 @@ function getTotalCP() {
 }
 
 function renderStats() {
+  const lvl = hero.stats.level || 1;
+  const exp = hero.stats.exp || 0;
+  const needed = getExpNeeded(lvl);
+  const expPct = Math.min(100, (exp / needed) * 100);
+
+  document.getElementById('panel-level').innerText = lvl;
+  document.getElementById('exp-text').innerText = `${exp.toLocaleString()} / ${needed.toLocaleString()}`;
+  document.getElementById('exp-bar-fill').style.width = expPct + '%';
+
   const meta = [
     { key: 'str', icon: '💪', label: 'STR' },
     { key: 'agi', icon: '⚡', label: 'AGI' },
@@ -381,24 +431,15 @@ function renderStats() {
     const pct = Math.min(100, (val / 50) * 100);
     return `
       <div class="stat-row">
-        <span style="width:65px; font-weight:700;">${m.icon} ${m.label}: ${val}</span>
+        <span style="width:72px; font-weight:700;">${m.icon} ${m.label}: ${val}</span>
         <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${pct}%"></div></div>
-        <button class="plus-btn" ${hero.unspentPoints <= 0 ? 'disabled' : ''} onclick="upgradeStat('${m.key}')">[+1]</button>
+        <span style="font-size:10px; color:#4ade80; font-weight:800;">+1/Lv</span>
       </div>
     `;
   }).join('');
 }
 
-function upgradeStat(key) {
-  if (hero.unspentPoints <= 0) return;
-  hero.unspentPoints--;
-  pointsSpentSinceSync += 1;
-  hero.stats[key]++;
-  hasUnsaved = true;
-  renderAll();
-}
-
-// --- 6. 5-SLOT GEAR & ARMORY ---
+// --- 7. 5-SLOT GEAR & ARMORY ---
 function renderSlots() {
   const slotDefs = [
     { key: 'head', defIcon: '🪖', label: 'Head' },
@@ -453,7 +494,7 @@ function equipGear(itemId) {
   renderAll();
 }
 
-// --- 7. FLOOR ENEMY LOOKUP & RENDER ---
+// --- 8. FLOOR ENEMY LOOKUP & RENDER ---
 function getFloorEnemy(floor) {
   const isBoss = floor % 10 === 0;
   const reqCP = Math.floor(250 * Math.pow(1.15, floor - 1));
@@ -485,11 +526,11 @@ function renderArena() {
 function renderAll() {
   const charObj = getEquippedCharacterObj();
   document.getElementById('hud-name').innerText = hero.name;
+  document.getElementById('hud-level').innerText = hero.stats.level || 1;
   document.getElementById('hud-id').innerText = hero.studentId;
   document.getElementById('hud-floor').innerText = hero.towerFloor;
   document.getElementById('hud-cp').innerText = getTotalCP().toLocaleString();
   document.getElementById('hud-pts').innerText = hero.unspentPoints;
-  document.getElementById('panel-pts').innerText = hero.unspentPoints;
   document.getElementById('gacha-pts-display').innerText = hero.unspentPoints;
   document.getElementById('active-char-badge').innerText = charObj
     ? `[${charObj.rarity}] ${charObj.name}`
@@ -510,6 +551,7 @@ function focusSection(id, btn) {
   document.getElementById(id).scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
+// --- 9. CLOUD SYNC (OVERWRITES IN PLACE) & LEADERBOARD ---
 async function syncProgress() {
   showToast("☁️ Saving Hero...", "#10b981");
   try {
@@ -544,12 +586,9 @@ async function syncProgress() {
   }
 }
 
-// --- 8. TOWER RAID LEADERBOARD ---
-async function openLeaderboard() {
-  const modal = document.getElementById('leaderboard-modal');
+async function loadLeaderboard() {
   const list = document.getElementById('leaderboard-list');
-  modal.classList.remove('hidden');
-  list.innerHTML = '<p style="text-align:center; color:var(--muted); padding:20px;">Loading Tower Rankings...</p>';
+  if (!list || !hero) return;
 
   try {
     if (hasUnsaved) await syncProgress();
@@ -563,7 +602,7 @@ async function openLeaderboard() {
 
     const ranks = json.data || [];
     if (ranks.length === 0) {
-      list.innerHTML = '<p style="text-align:center; color:var(--muted); padding:20px;">No raiders ranked yet.</p>';
+      list.innerHTML = '<p style="text-align:center; color:var(--muted); font-size:12px; padding:10px;">No raiders ranked yet.</p>';
       return;
     }
 
@@ -571,31 +610,26 @@ async function openLeaderboard() {
       const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
       const isMe = String(r.studentId) === String(hero.studentId);
       return `
-        <div class="rpg-card" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; ${isMe ? 'border-color:var(--gold); background:rgba(245,158,11,0.12);' : ''}">
-          <div style="display:flex; align-items:center; gap:10px;">
-            <div style="font-size:18px; font-weight:900; min-width:32px; text-align:center; color:${idx < 3 ? 'var(--gold)' : 'var(--muted)'};">${medal}</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px; margin-bottom:6px; border-radius:10px; background:${isMe ? 'rgba(245,158,11,0.15)' : '#0f172a'}; border:1px solid ${isMe ? 'var(--gold)' : '#1e293b'};">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:15px; font-weight:900; min-width:26px; text-align:center; color:${idx < 3 ? 'var(--gold)' : 'var(--muted)'};">${medal}</span>
             <div>
-              <div style="font-weight:800; font-size:13px;">${r.name} ${isMe ? '<span style="color:var(--gold); font-size:10px;">(YOU)</span>' : ''}</div>
-              <div style="font-size:11px; color:#c084fc;">⚔️ ${r.heroName}</div>
+              <div style="font-weight:800; font-size:12px;">${r.name} <span style="color:#60a5fa; font-size:10px;">(Lv.${r.level})</span></div>
+              <div style="font-size:10px; color:#c084fc;">⚔️ ${r.heroName}</div>
             </div>
           </div>
           <div style="text-align:right;">
-            <div style="font-weight:900; font-size:13px; color:#38bdf8;">FLOOR ${r.floor}</div>
-            <div style="font-size:11px; color:var(--gold);">${Number(r.cp).toLocaleString()} CP</div>
+            <div style="font-weight:900; font-size:12px; color:#38bdf8;">FLOOR ${r.floor}</div>
+            <div style="font-size:10px; color:var(--gold);">${Number(r.cp).toLocaleString()} CP</div>
           </div>
         </div>
       `;
     }).join('');
   } catch (err) {
-    list.innerHTML = `<p style="text-align:center; color:#f87171; padding:20px;">Error: ${err.message}</p>`;
+    list.innerHTML = `<p style="text-align:center; color:#f87171; font-size:12px;">Error: ${err.message}</p>`;
   }
 }
 
-function closeLeaderboard() {
-  document.getElementById('leaderboard-modal').classList.add('hidden');
-}
-
-// --- 9. LIVE TEACHER POINTS AUTO-POLLING ---
 function startPointsRefreshLoop() {
   setInterval(async () => {
     if (!hero) return;
@@ -610,7 +644,7 @@ function startPointsRefreshLoop() {
         if (livePts !== hero.unspentPoints) {
           hero.unspentPoints = livePts;
           renderAll();
-          showToast("⭐ New Class Points Received!", "#3b82f6");
+          showToast("⭐ New Gacha Points Received!", "#3b82f6");
           setTimeout(hideToast, 2500);
         }
       }
