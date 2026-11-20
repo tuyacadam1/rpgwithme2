@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Hero Academy RPG</title>
+  <title>Hero Gacha Tower RPG</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,9 +12,9 @@
   <!-- LOGIN -->
   <div id="login-screen" style="margin:auto; width:90%; max-width:380px;">
     <div class="rpg-card" style="text-align:center; padding:24px;">
-      <div style="font-size:48px; margin-bottom:8px;">⚔️</div>
-      <h2 style="color:var(--gold); margin-bottom:4px;">HERO ACADEMY</h2>
-      <p style="font-size:12px; color:var(--muted); margin-bottom:16px;">Enter your Student ID to summon your hero</p>
+      <div style="font-size:48px; margin-bottom:8px;">🎰</div>
+      <h2 style="color:var(--gold); margin-bottom:4px;">TOWER GACHA RPG</h2>
+      <p style="font-size:12px; color:var(--muted); margin-bottom:16px;">Enter your Student ID to summon heroes & raid the tower</p>
       <input type="text" id="student-id-input" placeholder="Student ID (e.g., 2026001)"
         style="width:100%; padding:12px; border-radius:10px; border:1px solid #374151; background:#090d16; color:white; margin-bottom:12px; text-align:center; font-size:16px;">
       <button class="raid-btn" onclick="loginStudent()">ENTER WORLD</button>
@@ -30,12 +30,12 @@
       </div>
       <div style="text-align:right;">
         <div class="cp-val"><span id="hud-cp">0</span> CP</div>
-        <div class="pts-pill">★ <span id="hud-pts">0</span> Stat Points</div>
+        <div class="pts-pill">★ <span id="hud-pts">0</span> Class Points</div>
       </div>
     </header>
 
     <div class="game-body">
-      <!-- LEFT / TOP: CHARACTER STAGE & DESIGN PICKER -->
+      <!-- LEFT / TOP: EQUIPPED HERO STAGE & GACHA SUMMON -->
       <div class="hero-stage-col">
         <div class="hero-stage">
           <div class="slot-col">
@@ -44,8 +44,9 @@
           </div>
 
           <div class="character-center">
-            <img id="hero-sprite-display" class="sprite-img" src="" alt="Hero">
+            <div id="stage-hero-sprite" class="sprite-frame"></div>
             <div class="pedestal-ring"></div>
+            <div id="active-char-badge" style="font-size:11px; font-weight:800; color:var(--gold); margin-top:4px;">Novice Adventurer</div>
           </div>
 
           <div class="slot-col">
@@ -55,20 +56,26 @@
           </div>
         </div>
 
-        <!-- GENDER & TEACHER-UPLOADED CHARACTER DESIGNS -->
-        <div class="rpg-card" style="margin-top:12px;" id="panel-customizer">
-          <div class="card-title"><span>👤 Choose Gender & Character Design</span></div>
-          <div class="gender-toggle">
-            <button class="g-btn" id="btn-male" onclick="setGender('Male')">♂️ Male</button>
-            <button class="g-btn" id="btn-female" onclick="setGender('Female')">♀️ Female</button>
+        <!-- GACHA SUMMON & UNLOCKED HEROES -->
+        <div class="gacha-banner" style="margin-top:12px;" id="panel-gacha">
+          <div class="card-title" style="color:#e879f9;">
+            <span>🎰 Character Gacha Summon</span>
+            <span>Points: <b id="gacha-pts-display">0</b></span>
           </div>
-          <div class="char-picker-row" id="character-options"></div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
+            <button class="gacha-btn" id="roll-1-btn" onclick="rollGacha(1)">✨ Summon x1 (5 Pts)</button>
+            <button class="gacha-btn" id="roll-5-btn" style="background:linear-gradient(180deg, #f59e0b, #b45309); color:#000;" onclick="rollGacha(5)">🔥 Summon x5 (22 Pts)</button>
+          </div>
+          <div id="gacha-result-log" style="font-size:12px; text-align:center; font-weight:700; min-height:18px; margin-bottom:6px;"></div>
+          
+          <div style="font-size:11px; color:var(--muted);">Your Unlocked Characters (Tap to Deploy):</div>
+          <div class="char-roster-row" id="unlocked-chars-row"></div>
         </div>
       </div>
 
-      <!-- RIGHT / BOTTOM: STATS & MISCRITS-STYLE TOWER ARENA -->
+      <!-- RIGHT / BOTTOM: TOWER RAID ARENA & STAT ALLOCATION -->
       <div class="control-col" style="display:flex; flex-direction:column; gap:12px;">
-        <!-- MISCRITS-STYLE BATTLE ARENA -->
+        <!-- MISCRITS-STYLE ANIMATED TOWER ARENA -->
         <div class="miscrits-arena" id="panel-tower">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
             <span style="font-size:11px; font-weight:800; color:#fbbf24;" id="tower-floor-badge">FLOOR 1</span>
@@ -95,11 +102,11 @@
 
           <div class="arena-stage">
             <div class="combatant player" id="combatant-hero">
-              <img id="arena-hero-img" src="" alt="Hero">
+              <div id="arena-hero-sprite" class="arena-sprite"></div>
               <div class="arena-pad"></div>
             </div>
             <div class="combatant enemy" id="combatant-enemy">
-              <img id="arena-enemy-img" src="" alt="Enemy">
+              <div id="arena-enemy-sprite" class="arena-sprite"></div>
               <div class="arena-pad"></div>
             </div>
           </div>
@@ -108,11 +115,11 @@
           <div id="raid-result" style="margin-top:8px; font-size:12px; text-align:center; font-weight:700; min-height:18px;"></div>
         </div>
 
-        <!-- STAT ALLOCATION -->
+        <!-- STAT ALLOCATION (SHARES SAME POINTS POOL) -->
         <div class="rpg-card" id="panel-stats">
           <div class="card-title">
-            <span>📊 Stat Points</span>
-            <span style="color:#60a5fa;">(+<span id="panel-pts">0</span> Available)</span>
+            <span>📊 Stat Upgrade (1 Pt each)</span>
+            <span style="color:#38bdf8;">Available: <span id="panel-pts">0</span> Pts</span>
           </div>
           <div id="stat-rows"></div>
         </div>
@@ -121,9 +128,9 @@
 
     <nav class="bottom-nav">
       <button class="nav-item active" onclick="focusSection('panel-tower', this)"><span class="nav-icon">⚔️</span>Arena</button>
-      <button class="nav-item" onclick="openArmory('all')"><span class="nav-icon">🎒</span>Equip (5)</button>
+      <button class="nav-item" onclick="focusSection('panel-gacha', this)"><span class="nav-icon">🎰</span>Gacha</button>
+      <button class="nav-item" onclick="openArmory('all')"><span class="nav-icon">🎒</span>Gear (5)</button>
       <button class="nav-item" onclick="focusSection('panel-stats', this)"><span class="nav-icon">📊</span>Stats</button>
-      <button class="nav-item" onclick="focusSection('panel-customizer', this)"><span class="nav-icon">👤</span>Heroes</button>
       <button class="nav-item" style="color:#4ade80;" onclick="syncProgress()"><span class="nav-icon">☁️</span>Sync</button>
     </nav>
   </div>
