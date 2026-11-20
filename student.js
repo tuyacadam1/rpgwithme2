@@ -1,15 +1,32 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbxPN7yKyqOwyyxIarj2BTkIcuMOomlfc52zCo2vK4AcVWg8TRofqKaRR-kj1yKiLiENWA/exec";
+const API_URL = "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL";
 
 let hero = null;
 let hasUnsaved = false;
 let isBattling = false;
+let animFrame = 0;
+let heroAnimRow = 0; // 0 = Idle (Row 1), 1 = Attack (Row 2), 2 = Ultimate (Row 3)
 
-// Built-in SVG fallback sprites so the game looks great even before the teacher uploads custom art
-const DEFAULT_SPRITES = {
-  Male: "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 200"><circle cx="80" cy="48" r="22" fill="#fde68a"/><path d="M56,44 Q60,18 80,20 Q100,18 104,44 Q92,30 80,38 Q68,30 56,44 Z" fill="#3b2314"/><rect x="56" y="74" width="48" height="62" rx="10" fill="#2563eb"/><rect x="60" y="136" width="16" height="48" rx="5" fill="#1e293b"/><rect x="84" y="136" width="16" height="48" rx="5" fill="#1e293b"/><rect x="112" y="30" width="7" height="95" rx="3" fill="#38bdf8"/></svg>`),
-  Female: "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 200"><path d="M52,44 Q45,95 56,120 L104,120 Q115,95 108,44 Z" fill="#92400e"/><circle cx="80" cy="48" r="21" fill="#fde68a"/><path d="M58,44 Q62,18 80,20 Q98,18 102,44 Z" fill="#92400e"/><path d="M60,74 L100,74 L106,136 L54,136 Z" fill="#7c3aed"/><rect x="62" y="136" width="14" height="48" rx="5" fill="#1e293b"/><rect x="84" y="136" width="14" height="48" rx="5" fill="#1e293b"/><rect x="112" y="30" width="7" height="95" rx="3" fill="#fbbf24"/></svg>`),
-  Mob: "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 180"><ellipse cx="80" cy="100" rx="52" ry="46" fill="#16a34a"/><circle cx="62" cy="88" r="8" fill="#fef08a"/><circle cx="98" cy="88" r="8" fill="#fef08a"/><circle cx="62" cy="88" r="4" fill="#000"/><circle cx="98" cy="88" r="4" fill="#000"/><path d="M58,118 Q80,104 102,118" stroke="#052e16" stroke-width="5" fill="none"/></svg>`),
-  Boss: "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 190"><polygon points="30,40 60,70 45,90" fill="#dc2626"/><polygon points="150,40 120,70 135,90" fill="#dc2626"/><ellipse cx="90" cy="105" rx="60" ry="54" fill="#7f1d1d" stroke="#fbbf24" stroke-width="4"/><circle cx="68" cy="92" r="10" fill="#fbbf24"/><circle cx="112" cy="92" r="10" fill="#fbbf24"/><path d="M60,126 L75,116 L90,126 L105,116 L120,126" stroke="#fff" stroke-width="4" fill="none"/></svg>`)
+const RARITY_MULT = { Common: 1.0, Rare: 1.2, Epic: 1.5, Legendary: 2.0 };
+
+const DEFAULT_HERO = {
+  assetId: 'default_novice',
+  type: 'character',
+  rarity: 'Common',
+  name: 'Novice Knight',
+  imageData: "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160"><circle cx="80" cy="40" r="20" fill="#fde68a"/><rect x="58" y="64" width="44" height="54" rx="8" fill="#2563eb"/><rect x="62" y="118" width="14" height="34" rx="4" fill="#1e293b"/><rect x="84" y="118" width="14" height="34" rx="4" fill="#1e293b"/><rect x="110" y="25" width="7" height="85" rx="3" fill="#38bdf8"/></svg>`),
+  meta: { cols: 1, rows: 1 }
+};
+
+const DEFAULT_MOB = {
+  name: 'Tower Goblin',
+  imageData: "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160"><ellipse cx="80" cy="90" rx="48" ry="42" fill="#16a34a"/><circle cx="64" cy="80" r="7" fill="#fef08a"/><circle cx="96" cy="80" r="7" fill="#fef08a"/></svg>`),
+  meta: { cols: 1, rows: 1 }
+};
+
+const DEFAULT_BOSS = {
+  name: 'Tower Dragon Boss',
+  imageData: "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160"><ellipse cx="80" cy="92" rx="55" ry="48" fill="#7f1d1d" stroke="#fbbf24" stroke-width="4"/><circle cx="62" cy="80" r="9" fill="#fbbf24"/><circle cx="98" cy="80" r="9" fill="#fbbf24"/></svg>`),
+  meta: { cols: 1, rows: 1 }
 };
 
 const LOOT_TABLE = [
@@ -25,11 +42,12 @@ const LOOT_TABLE = [
   { id: 'ac_crown', slot: 'accessory', icon: '💎', name: 'Heart of the Tower', rarity: 'Legendary', power: 75 }
 ];
 
+// --- 1. LOGIN & SPRITE LOOP ENGINE ---
 async function loginStudent() {
   const studentId = document.getElementById('student-id-input').value.trim();
   if (!studentId) return alert("Enter your Student ID.");
 
-  showToast("Loading Hero...", "#3b82f6");
+  showToast("Summoning World...", "#3b82f6");
   try {
     const res = await fetch(API_URL, {
       method: 'POST',
@@ -39,12 +57,14 @@ async function loginStudent() {
     if (json.status === 'error') throw new Error(json.message);
 
     hero = json.data;
-    if (!hero.gender) hero.gender = 'Male';
-    if (!hero.avatar) hero.avatar = {};
+    if (!hero.avatar || !Array.isArray(hero.avatar.unlockedChars)) {
+      hero.avatar = { unlockedChars: [], equippedChar: null };
+    }
 
     document.getElementById('login-screen').classList.add('hidden');
     document.getElementById('game-screen').classList.remove('hidden');
 
+    startSpriteAnimationLoop();
     renderAll();
     hideToast();
   } catch (err) {
@@ -53,57 +73,131 @@ async function loginStudent() {
   }
 }
 
-// --- CHARACTER DESIGN & GENDER ---
-function getActiveHeroSprite() {
-  if (hero.avatar.selectedAssetId) {
-    const found = (hero.assets || []).find(a => a.assetId === hero.avatar.selectedAssetId);
-    if (found) return found.imageData;
+function getEquippedCharacterObj() {
+  if (hero.avatar.equippedChar) {
+    const found = (hero.assets || []).find(a => a.assetId === hero.avatar.equippedChar);
+    if (found) return found;
   }
-  return DEFAULT_SPRITES[hero.gender] || DEFAULT_SPRITES.Male;
+  return DEFAULT_HERO;
 }
 
-function setGender(g) {
-  hero.gender = g;
-  // Auto-select first matching teacher character design for that gender if available
-  const matching = (hero.assets || []).filter(a => a.type === 'character' && a.gender === g);
-  hero.avatar.selectedAssetId = matching.length > 0 ? matching[0].assetId : null;
+// Smooth 60fps-friendly sprite sheet frame stepper for Idle (Row 1) & Attack (Row 2/3)
+function startSpriteAnimationLoop() {
+  setInterval(() => {
+    animFrame++;
+    const charObj = getEquippedCharacterObj();
+    const enemyObj = getFloorEnemy(hero.towerFloor).asset;
+
+    applySpriteFrame(document.getElementById('stage-hero-sprite'), charObj, animFrame, 0);
+    applySpriteFrame(document.getElementById('arena-hero-sprite'), charObj, animFrame, heroAnimRow);
+    applySpriteFrame(document.getElementById('arena-enemy-sprite'), enemyObj, animFrame, 0);
+  }, 135);
+}
+
+function applySpriteFrame(el, asset, frameIdx, targetRow) {
+  if (!el || !asset) return;
+  const cols = Math.max(1, asset.meta?.cols || 1);
+  const rows = Math.max(1, asset.meta?.rows || 1);
+  const col = frameIdx % cols;
+  const row = Math.min(rows - 1, targetRow);
+
+  el.style.backgroundImage = `url(${asset.imageData})`;
+  el.style.backgroundSize = `${cols * 100}% ${rows * 100}%`;
+  const xPct = cols > 1 ? (col / (cols - 1)) * 100 : 0;
+  const yPct = rows > 1 ? (row / (rows - 1)) * 100 : 0;
+  el.style.backgroundPosition = `${xPct}% ${yPct}%`;
+}
+
+// --- 2. GACHA SYSTEM (USES SAME CLASS POINTS POOL) ---
+function rollGacha(count) {
+  const cost = count === 5 ? 22 : 5;
+  if (hero.unspentPoints < cost) return alert(`Need ${cost} Class Points to summon!`);
+
+  const charPool = (hero.assets || []).filter(a => a.type === 'character');
+  if (charPool.length === 0) return alert("Your teacher hasn't uploaded Gacha Characters yet!");
+
+  hero.unspentPoints -= cost;
+  hasUnsaved = true;
+  const pullResults = [];
+
+  for (let i = 0; i < count; i++) {
+    const roll = Math.random() * 100;
+    let rarity = 'Common';
+    if (roll < 5) rarity = 'Legendary';
+    else if (roll < 20) rarity = 'Epic';
+    else if (roll < 50) rarity = 'Rare';
+
+    let candidates = charPool.filter(c => c.rarity === rarity);
+    if (candidates.length === 0) candidates = charPool; // Fallback if teacher only uploaded 1 rarity
+    const pulled = candidates[Math.floor(Math.random() * candidates.length)];
+
+    // Check if already unlocked -> increment Star level on duplicates!
+    const existing = hero.avatar.unlockedChars.find(u => u.id === pulled.assetId);
+    if (existing) {
+      existing.stars = (existing.stars || 1) + 1;
+      pullResults.push(`[${pulled.rarity}] ${pulled.name} (★${existing.stars} Up!)`);
+    } else {
+      hero.avatar.unlockedChars.push({ id: pulled.assetId, stars: 1 });
+      pullResults.push(`NEW! [${pulled.rarity}] ${pulled.name}`);
+    }
+
+    // Auto-equip if student was still using the default knight
+    if (!hero.avatar.equippedChar) {
+      hero.avatar.equippedChar = pulled.assetId;
+    }
+  }
+
+  document.getElementById('gacha-result-log').innerHTML =
+    `<span style="color:#e879f9;">🎉 ${pullResults.join(' • ')}</span>`;
+
+  renderAll();
+}
+
+function equipCharacter(assetId) {
+  hero.avatar.equippedChar = assetId;
   hasUnsaved = true;
   renderAll();
 }
 
-function selectCharacterSkin(assetId) {
-  hero.avatar.selectedAssetId = assetId;
-  hasUnsaved = true;
-  renderAll();
-}
-
-function renderCharacterOptions() {
-  const container = document.getElementById('character-options');
-  const genderSkins = (hero.assets || []).filter(a => a.type === 'character' && a.gender === hero.gender);
-
-  // Include default hero + any teacher-uploaded designs for the chosen gender
-  const options = [
-    { assetId: null, name: `Default ${hero.gender}`, imageData: DEFAULT_SPRITES[hero.gender] },
-    ...genderSkins
+function renderUnlockedCharacters() {
+  const row = document.getElementById('unlocked-chars-row');
+  const cards = [
+    { id: null, stars: 1, asset: DEFAULT_HERO },
+    ...hero.avatar.unlockedChars.map(u => ({
+      id: u.id,
+      stars: u.stars || 1,
+      asset: (hero.assets || []).find(a => a.assetId === u.id)
+    })).filter(x => x.asset)
   ];
 
-  container.innerHTML = options.map(opt => `
-    <div class="char-option ${hero.avatar.selectedAssetId === opt.assetId ? 'active' : ''}"
-         onclick="selectCharacterSkin(${opt.assetId ? `'${opt.assetId}'` : 'null'})">
-      <img src="${opt.imageData}">
-      <div style="font-size:10px; font-weight:700; margin-top:3px;">${opt.name}</div>
-    </div>
-  `).join('');
+  row.innerHTML = cards.map(c => {
+    const a = c.asset;
+    const isSelected = hero.avatar.equippedChar === c.id;
+    return `
+      <div class="char-card rarity-${a.rarity} ${isSelected ? 'active' : ''}" onclick="equipCharacter(${c.id ? `'${c.id}'` : 'null'})">
+        <div class="char-thumb" style="background-image:url(${a.imageData}); background-size:${a.meta.cols * 100}% ${a.meta.rows * 100}%; background-position:0% 0%;"></div>
+        <div style="font-size:10px; font-weight:800; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${a.name}</div>
+        <div style="font-size:9px; color:var(--gold);">★${c.stars} (${RARITY_MULT[a.rarity]}x)</div>
+      </div>
+    `;
+  }).join('');
 }
 
-// --- STATS & CP ---
+// --- 3. COMBAT POWER & STATS (USES SAME CLASS POINTS POOL) ---
 function getTotalCP() {
   const s = hero.stats;
-  let cp = (s.str * 15) + (s.agi * 12) + (s.vit * 12) + (s.int * 15);
+  let base = (s.str * 15) + (s.agi * 12) + (s.vit * 12) + (s.int * 15);
   Object.values(hero.equipped).forEach(item => {
-    if (item) cp += (item.power * 10);
+    if (item) base += (item.power * 10);
   });
-  return cp;
+
+  // Apply Gacha Character Rarity & Star Awakening Multiplier!
+  const charObj = getEquippedCharacterObj();
+  const unlockedEntry = hero.avatar.unlockedChars.find(u => u.id === charObj.assetId);
+  const stars = unlockedEntry ? unlockedEntry.stars : 1;
+  const mult = (RARITY_MULT[charObj.rarity] || 1.0) + ((stars - 1) * 0.1);
+
+  return Math.floor(base * mult);
 }
 
 function renderStats() {
@@ -135,7 +229,7 @@ function upgradeStat(key) {
   renderAll();
 }
 
-// --- 5-SLOT GEAR & ARMORY (NO DUPLICATES) ---
+// --- 4. 5-SLOT GEAR & ARMORY (NO DUPLICATES) ---
 function renderSlots() {
   const slotDefs = [
     { key: 'head', defIcon: '🪖', label: 'Head' },
@@ -174,7 +268,7 @@ function openArmory(slotFilter) {
       </div>
       <button class="plus-btn" onclick="equipGear('${item.id}')">EQUIP</button>
     </div>
-  `).join('') || '<p style="text-align:center; color:var(--muted); padding:20px;">No items unlocked yet. Defeat Tower floors!</p>';
+  `).join('') || '<p style="text-align:center; color:var(--muted); padding:20px;">No gear unlocked yet. Raid the Tower!</p>';
 
   modal.classList.remove('hidden');
 }
@@ -190,36 +284,32 @@ function equipGear(itemId) {
   renderAll();
 }
 
-// --- MISCRITS-STYLE TOWER ARENA & TEACHER MOBS/BOSSES ---
+// --- 5. INFINITE TOWER RAID (SPRITE SHEET ATTACK ANIMATION) ---
 function getFloorEnemy(floor) {
   const isBoss = floor % 10 === 0;
   const reqCP = Math.floor(250 * Math.pow(1.15, floor - 1));
   const assets = hero.assets || [];
 
-  // Match teacher-uploaded Boss or Mob by floor rule
   const targetType = isBoss ? 'boss' : 'mob';
-  const specific = assets.find(a => a.type === targetType && a.floorRule === String(floor));
-  const generalPool = assets.filter(a => a.type === targetType && a.floorRule === 'all');
+  const specific = assets.find(a => a.type === targetType && a.meta?.floorRule === String(floor));
+  const generalPool = assets.filter(a => a.type === targetType && a.meta?.floorRule === 'all');
   const chosen = specific || (generalPool.length > 0 ? generalPool[(floor - 1) % generalPool.length] : null);
 
   return {
     isBoss,
     reqCP,
-    name: chosen ? chosen.name : (isBoss ? `Floor ${floor} Boss` : `Floor ${floor} Guardian`),
-    image: chosen ? chosen.imageData : (isBoss ? DEFAULT_SPRITES.Boss : DEFAULT_SPRITES.Mob)
+    asset: chosen || (isBoss ? DEFAULT_BOSS : DEFAULT_MOB)
   };
 }
 
 function renderArena() {
   const enemy = getFloorEnemy(hero.towerFloor);
   document.getElementById('tower-floor-badge').innerText = enemy.isBoss ? `🔥 FLOOR ${hero.towerFloor} BOSS` : `FLOOR ${hero.towerFloor}`;
-  document.getElementById('arena-hero-name').innerText = hero.name;
+  document.getElementById('arena-hero-name').innerText = getEquippedCharacterObj().name;
   document.getElementById('arena-hero-cp').innerText = getTotalCP().toLocaleString() + " CP";
-  document.getElementById('arena-enemy-name').innerText = enemy.name;
+  document.getElementById('arena-enemy-name').innerText = enemy.asset.name;
   document.getElementById('arena-enemy-cp').innerText = enemy.reqCP.toLocaleString() + " CP";
 
-  document.getElementById('arena-hero-img').src = getActiveHeroSprite();
-  document.getElementById('arena-enemy-img').src = enemy.image;
   document.getElementById('hero-hp-bar').style.width = '100%';
   document.getElementById('enemy-hp-bar').style.width = '100%';
 }
@@ -230,23 +320,25 @@ function battleTower() {
 
   const enemy = getFloorEnemy(hero.towerFloor);
   const myCP = getTotalCP();
-  const heroImg = document.getElementById('arena-hero-img');
-  const enemyImg = document.getElementById('arena-enemy-img');
+  const heroSprite = document.getElementById('arena-hero-sprite');
+  const enemySprite = document.getElementById('arena-enemy-sprite');
   const resBox = document.getElementById('raid-result');
 
-  // Step 1: Hero lunges forward (Miscrits attack feel)
-  heroImg.classList.add('lunge-right');
-  setTimeout(() => {
-    enemyImg.classList.add('hit-flash');
-    document.getElementById('enemy-hp-bar').style.width = myCP >= enemy.reqCP ? '0%' : '65%';
-  }, 180);
+  // Trigger Row 2 (Attack) or Row 3 (Ultimate on Boss floors) of the sprite sheet!
+  heroAnimRow = enemy.isBoss ? 2 : 1;
+  heroSprite.classList.add('lunge-right');
 
   setTimeout(() => {
-    heroImg.classList.remove('lunge-right');
-    enemyImg.classList.remove('hit-flash');
+    enemySprite.classList.add('hit-flash');
+    document.getElementById('enemy-hp-bar').style.width = myCP >= enemy.reqCP ? '0%' : '65%';
+  }, 250);
+
+  setTimeout(() => {
+    heroAnimRow = 0; // Return to Row 1 Idle loop
+    heroSprite.classList.remove('lunge-right');
+    enemySprite.classList.remove('hit-flash');
 
     if (myCP >= enemy.reqCP) {
-      // Victory! Overwrite floor progress (+1)
       hero.towerFloor++;
       hasUnsaved = true;
 
@@ -258,7 +350,6 @@ function battleTower() {
       const pool = LOOT_TABLE.filter(i => i.rarity === rarity);
       const drop = pool[Math.floor(Math.random() * pool.length)];
 
-      // Duplicate check
       const exists = hero.inventory.some(i => i.id === drop.id);
       if (!exists) {
         hero.inventory.push(drop);
@@ -270,36 +361,37 @@ function battleTower() {
       renderAll();
       if (enemy.isBoss) syncProgress();
     } else {
-      // Enemy counter-attack!
-      enemyImg.classList.add('lunge-left');
+      enemySprite.classList.add('lunge-left');
       setTimeout(() => {
-        heroImg.classList.add('hit-flash');
+        heroSprite.classList.add('hit-flash');
         document.getElementById('hero-hp-bar').style.width = '10%';
-      }, 180);
+      }, 200);
       setTimeout(() => {
-        enemyImg.classList.remove('lunge-left');
-        heroImg.classList.remove('hit-flash');
+        enemySprite.classList.remove('lunge-left');
+        heroSprite.classList.remove('hit-flash');
         resBox.innerHTML = `<span style="color:#f87171;">💀 Defeated! Need ${(enemy.reqCP - myCP).toLocaleString()} more CP.</span>`;
-      }, 450);
+      }, 500);
     }
     isBattling = false;
-  }, 450);
+  }, 700);
 }
 
-// --- MASTER RENDER & CLOUD SYNC ---
+// --- 6. MASTER RENDER & CLOUD SYNC ---
 function renderAll() {
+  const charObj = getEquippedCharacterObj();
   document.getElementById('hud-name').innerText = hero.name;
   document.getElementById('hud-id').innerText = hero.studentId;
   document.getElementById('hud-floor').innerText = hero.towerFloor;
   document.getElementById('hud-cp').innerText = getTotalCP().toLocaleString();
   document.getElementById('hud-pts').innerText = hero.unspentPoints;
   document.getElementById('panel-pts').innerText = hero.unspentPoints;
+  document.getElementById('gacha-pts-display').innerText = hero.unspentPoints;
+  document.getElementById('active-char-badge').innerText = `[${charObj.rarity}] ${charObj.name}`;
 
-  document.getElementById('btn-male').classList.toggle('active', hero.gender === 'Male');
-  document.getElementById('btn-female').classList.toggle('active', hero.gender === 'Female');
+  document.getElementById('roll-1-btn').disabled = hero.unspentPoints < 5;
+  document.getElementById('roll-5-btn').disabled = hero.unspentPoints < 22;
 
-  document.getElementById('hero-sprite-display').src = getActiveHeroSprite();
-  renderCharacterOptions();
+  renderUnlockedCharacters();
   renderSlots();
   renderStats();
   renderArena();
@@ -320,7 +412,6 @@ async function syncProgress() {
         action: 'saveStudentState',
         studentId: hero.studentId,
         state: {
-          gender: hero.gender,
           avatar: hero.avatar,
           unspentPoints: hero.unspentPoints,
           stats: hero.stats,
