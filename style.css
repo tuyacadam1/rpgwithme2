@@ -11,7 +11,7 @@ body { background: radial-gradient(circle at top, #172033 0%, var(--bg-dark) 80%
   padding: 10px 14px; background: rgba(17, 24, 39, 0.95); border-bottom: 1px solid #2d3748; z-index: 20;
 }
 .cp-val { font-size: 18px; font-weight: 800; color: var(--gold); }
-.pts-pill { font-size: 11px; color: #60a5fa; font-weight: 700; }
+.pts-pill { font-size: 12px; color: #38bdf8; font-weight: 800; }
 
 .game-body {
   flex: 1; overflow-y: auto; padding: 12px; padding-bottom: 82px;
@@ -43,78 +43,61 @@ body { background: radial-gradient(circle at top, #172033 0%, var(--bg-dark) 80%
 .rarity-Epic { border-color: var(--epic) !important; box-shadow: 0 0 12px rgba(192, 132, 252, 0.35); }
 .rarity-Legendary { border-color: var(--legendary) !important; box-shadow: 0 0 15px rgba(251, 191, 36, 0.5); }
 
-/* CHARACTER & MISCRITS PEDESTAL */
+/* ANIMATED SPRITE SHEET BOX */
 .character-center { display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.sprite-img {
-  width: 145px; height: 175px; object-fit: contain; z-index: 2;
+.sprite-frame {
+  width: 145px; height: 145px; background-repeat: no-repeat; z-index: 2;
   filter: drop-shadow(0 8px 10px rgba(0,0,0,0.85));
-  animation: floatIdle 2.6s ease-in-out infinite;
 }
 .pedestal-ring {
-  width: 130px; height: 26px; margin-top: -14px; border-radius: 50%;
+  width: 130px; height: 26px; margin-top: -12px; border-radius: 50%;
   background: radial-gradient(ellipse at center, rgba(56, 189, 248, 0.45) 0%, transparent 70%);
   border: 1px solid rgba(56, 189, 248, 0.45);
 }
 
-@keyframes floatIdle {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-6px); }
-}
-
-/* MISCRITS-STYLE SIDE-BY-SIDE BATTLE ARENA */
+/* MISCRITS-STYLE SIDE-BY-SIDE TOWER ARENA */
 .miscrits-arena {
   position: relative; border-radius: 16px; overflow: hidden;
   background: linear-gradient(180deg, #1e1b4b 0%, #312e81 48%, #14532d 52%, #052e16 100%);
   border: 2px solid #4c1d95; padding: 14px 10px;
 }
-.arena-hud { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
-.hp-box {
-  flex: 1; background: rgba(9, 13, 22, 0.85); border: 1px solid #475569;
-  border-radius: 10px; padding: 6px 8px;
-}
+.arena-hud { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.hp-box { flex: 1; background: rgba(9, 13, 22, 0.85); border: 1px solid #475569; border-radius: 10px; padding: 6px 8px; }
 .hp-bar-track { width: 100%; height: 8px; background: #1f2937; border-radius: 4px; overflow: hidden; margin-top: 4px; }
 .hp-bar-fill { height: 100%; background: #22c55e; transition: width 0.35s ease; }
 
-.arena-stage {
-  display: flex; justify-content: space-between; align-items: flex-end;
-  padding: 8px 12px 4px; min-height: 165px;
-}
-.combatant { display: flex; flex-direction: column; align-items: center; width: 45%; position: relative; }
-.combatant img {
-  width: 115px; height: 130px; object-fit: contain; z-index: 2;
+.arena-stage { display: flex; justify-content: space-between; align-items: flex-end; padding: 6px 10px 4px; min-height: 155px; }
+.combatant { display: flex; flex-direction: column; align-items: center; width: 46%; position: relative; }
+.arena-sprite {
+  width: 120px; height: 120px; background-repeat: no-repeat; z-index: 2;
   filter: drop-shadow(0 8px 8px rgba(0,0,0,0.8));
-  animation: floatIdle 2.4s ease-in-out infinite;
 }
-.combatant.enemy img { animation-delay: 0.6s; }
 .arena-pad {
-  width: 110px; height: 22px; margin-top: -12px; border-radius: 50%;
+  width: 110px; height: 22px; margin-top: -10px; border-radius: 50%;
   background: radial-gradient(ellipse at center, rgba(250, 204, 21, 0.45) 0%, transparent 75%);
   border: 1px solid rgba(250, 204, 21, 0.4);
 }
 
-/* Lunge & Hit Animations */
-.lunge-right { animation: lungeR 0.35s ease !important; }
-.lunge-left { animation: lungeL 0.35s ease !important; }
+.lunge-right { transform: translateX(48px) scale(1.1); transition: transform 0.2s; }
+.lunge-left { transform: translateX(-48px) scale(1.1); transition: transform 0.2s; }
 .hit-flash { filter: brightness(3) drop-shadow(0 0 12px red) !important; }
-@keyframes lungeR { 50% { transform: translateX(45px) scale(1.08); } }
-@keyframes lungeL { 50% { transform: translateX(-45px) scale(1.08); } }
 
-/* CARDS & CONTROLS */
-.rpg-card { background: rgba(17, 24, 39, 0.92); border: 1px solid #2d3748; border-radius: 14px; padding: 12px; }
-.card-title { font-size: 12px; text-transform: uppercase; color: var(--gold); font-weight: 800; margin-bottom: 10px; display: flex; justify-content: space-between; }
-
-.gender-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
-.g-btn { padding: 8px; border-radius: 8px; border: 1px solid #374151; background: #1f2937; color: var(--text); font-weight: 700; font-size: 12px; cursor: pointer; }
-.g-btn.active { border-color: var(--blue); background: rgba(59, 130, 246, 0.25); color: #60a5fa; }
-
-.char-picker-row { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; }
-.char-option {
-  min-width: 74px; background: #0f172a; border: 2px solid #334155; border-radius: 10px;
+/* GACHA BANNER & ROSTER */
+.gacha-banner {
+  background: linear-gradient(135deg, #311042 0%, #1e1b4b 100%);
+  border: 1px solid #a855f7; border-radius: 14px; padding: 12px;
+}
+.char-roster-row { display: flex; gap: 10px; overflow-x: auto; padding: 6px 0; }
+.char-card {
+  min-width: 82px; background: #0f172a; border: 2px solid #334155; border-radius: 10px;
   padding: 6px; text-align: center; cursor: pointer;
 }
-.char-option.active { border-color: var(--gold); box-shadow: 0 0 10px rgba(245, 158, 11, 0.35); }
-.char-option img { width: 52px; height: 52px; object-fit: contain; }
+.char-card.active { border-color: var(--gold); box-shadow: 0 0 12px rgba(245, 158, 11, 0.45); }
+.char-thumb { width: 54px; height: 54px; margin: 0 auto; background-repeat: no-repeat; }
 
+/* STATS & BUTTONS */
+.rpg-card { background: rgba(17, 24, 39, 0.92); border: 1px solid #2d3748; border-radius: 14px; padding: 12px; }
+.card-title { font-size: 12px; text-transform: uppercase; color: var(--gold); font-weight: 800; margin-bottom: 10px; display: flex; justify-content: space-between; }
 .stat-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-size: 12px; }
 .stat-bar-bg { flex: 1; height: 8px; background: #1f2937; border-radius: 4px; overflow: hidden; }
 .stat-bar-fill { height: 100%; background: linear-gradient(90deg, #f59e0b, #fbbf24); }
@@ -122,10 +105,15 @@ body { background: radial-gradient(circle at top, #172033 0%, var(--bg-dark) 80%
 .plus-btn:disabled { opacity: 0.3; }
 
 .raid-btn {
-  width: 100%; padding: 12px; margin-top: 10px; border: none; border-radius: 10px;
+  width: 100%; padding: 12px; margin-top: 8px; border: none; border-radius: 10px;
   background: linear-gradient(180deg, #fbbf24 0%, #d97706 100%);
   color: #111827; font-weight: 900; font-size: 14px; cursor: pointer;
 }
+.gacha-btn {
+  padding: 10px; border: none; border-radius: 10px; font-weight: 800; font-size: 12px; cursor: pointer;
+  background: linear-gradient(180deg, #c084fc 0%, #7e22ce 100%); color: white;
+}
+.gacha-btn:disabled { opacity: 0.4; }
 
 .bottom-nav {
   position: fixed; bottom: 0; left: 0; right: 0; height: 64px;
@@ -136,7 +124,7 @@ body { background: radial-gradient(circle at top, #172033 0%, var(--bg-dark) 80%
 .nav-item.active { color: var(--gold); }
 .nav-icon { font-size: 20px; }
 
-.drawer { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 100; display: flex; align-items: flex-end; justify-content: center; }
+.drawer { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; display: flex; align-items: flex-end; justify-content: center; }
 .drawer-box { background: #111827; width: 100%; max-width: 500px; max-height: 75dvh; border-radius: 20px 20px 0 0; padding: 16px; overflow-y: auto; border-top: 2px solid var(--gold); }
 .hidden { display: none !important; }
 #toast { position: fixed; top: 65px; left: 50%; transform: translateX(-50%); background: #10b981; color: #000; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 800; z-index: 200; display: none; }
