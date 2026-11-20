@@ -9,7 +9,7 @@
 <body>
   <div id="toast">Saved!</div>
 
-  <!-- LOGIN SCREEN -->
+  <!-- LOGIN -->
   <div id="login-screen" style="margin:auto; width:90%; max-width:380px;">
     <div class="rpg-card" style="text-align:center; padding:24px;">
       <div style="font-size:48px; margin-bottom:8px;">⚔️</div>
@@ -23,83 +23,92 @@
 
   <!-- MAIN GAME HUD -->
   <div id="game-screen" class="hidden" style="display:flex; flex-direction:column; height:100dvh;">
-    <!-- TOP HEADER -->
     <header class="rpg-header">
-      <div class="player-badge">
-        <div class="avatar-thumb" id="top-gender-icon">🛡️</div>
-        <div>
-          <div style="font-weight:800; font-size:14px;" id="hud-name">Student Name</div>
-          <div style="font-size:11px; color:#60a5fa;">ID: <span id="hud-id">---</span> • FLOOR <span id="hud-floor">1</span></div>
-        </div>
+      <div>
+        <div style="font-weight:800; font-size:14px;" id="hud-name">Student Name</div>
+        <div style="font-size:11px; color:#60a5fa;">ID: <span id="hud-id">---</span> • FLOOR <span id="hud-floor">1</span></div>
       </div>
-      <div class="cp-display">
+      <div style="text-align:right;">
         <div class="cp-val"><span id="hud-cp">0</span> CP</div>
         <div class="pts-pill">★ <span id="hud-pts">0</span> Stat Points</div>
       </div>
     </header>
 
-    <!-- RESPONSIVE BODY -->
     <div class="game-body">
-      <!-- LEFT / TOP COLUMN: VISUAL CHARACTER & 5 GEAR SLOTS -->
+      <!-- LEFT / TOP: CHARACTER STAGE & DESIGN PICKER -->
       <div class="hero-stage-col">
         <div class="hero-stage">
-          <!-- Left 2 Slots (Head, Weapon) -->
           <div class="slot-col">
-            <div class="gear-slot" id="slot-head" onclick="openArmory('head')">
-              <div class="gear-icon">🪖</div>
-              <div class="gear-name">Head</div>
-              <div class="gear-stat">Empty</div>
-            </div>
-            <div class="gear-slot" id="slot-weapon" onclick="openArmory('weapon')">
-              <div class="gear-icon">⚔️</div>
-              <div class="gear-name">Weapon</div>
-              <div class="gear-stat">Empty</div>
-            </div>
+            <div class="gear-slot" id="slot-head" onclick="openArmory('head')"></div>
+            <div class="gear-slot" id="slot-weapon" onclick="openArmory('weapon')"></div>
           </div>
 
-          <!-- Center Live Custom SVG Character -->
           <div class="character-center">
-            <svg id="hero-canvas" class="hero-svg" viewBox="0 0 200 260" xmlns="http://www.w3.org/2000/svg"></svg>
+            <img id="hero-sprite-display" class="sprite-img" src="" alt="Hero">
             <div class="pedestal-ring"></div>
           </div>
 
-          <!-- Right 3 Slots (Armor, Boots, Accessory) -->
           <div class="slot-col">
-            <div class="gear-slot" id="slot-armor" onclick="openArmory('armor')">
-              <div class="gear-icon">🛡️</div>
-              <div class="gear-name">Armor</div>
-              <div class="gear-stat">Empty</div>
-            </div>
-            <div class="gear-slot" id="slot-boots" onclick="openArmory('boots')">
-              <div class="gear-icon">👢</div>
-              <div class="gear-name">Boots</div>
-              <div class="gear-stat">Empty</div>
-            </div>
-            <div class="gear-slot" id="slot-accessory" onclick="openArmory('accessory')">
-              <div class="gear-icon">💍</div>
-              <div class="gear-name">Relic</div>
-              <div class="gear-stat">Empty</div>
-            </div>
+            <div class="gear-slot" id="slot-armor" onclick="openArmory('armor')"></div>
+            <div class="gear-slot" id="slot-boots" onclick="openArmory('boots')"></div>
+            <div class="gear-slot" id="slot-accessory" onclick="openArmory('accessory')"></div>
           </div>
         </div>
 
-        <!-- APPEARANCE CUSTOMIZER PANEL -->
+        <!-- GENDER & TEACHER-UPLOADED CHARACTER DESIGNS -->
         <div class="rpg-card" style="margin-top:12px;" id="panel-customizer">
-          <div class="card-title"><span>🎨 Character Appearance</span></div>
+          <div class="card-title"><span>👤 Choose Gender & Character Design</span></div>
           <div class="gender-toggle">
-            <button class="g-btn" id="btn-male" onclick="setGender('Male')">♂️ Male Hero</button>
-            <button class="g-btn" id="btn-female" onclick="setGender('Female')">♀️ Female Hero</button>
+            <button class="g-btn" id="btn-male" onclick="setGender('Male')">♂️ Male</button>
+            <button class="g-btn" id="btn-female" onclick="setGender('Female')">♀️ Female</button>
           </div>
-          <div style="font-size:11px; color:var(--muted);">Hair Style & Color</div>
-          <div class="swatch-row" id="hair-swatches"></div>
-          <div style="font-size:11px; color:var(--muted);">Armor Color Theme</div>
-          <div class="swatch-row" id="armor-swatches"></div>
+          <div class="char-picker-row" id="character-options"></div>
         </div>
       </div>
 
-      <!-- RIGHT / BOTTOM COLUMN: STATS & TOWER RAID -->
+      <!-- RIGHT / BOTTOM: STATS & MISCRITS-STYLE TOWER ARENA -->
       <div class="control-col" style="display:flex; flex-direction:column; gap:12px;">
-        <!-- STAT POINTS DISTRIBUTION -->
+        <!-- MISCRITS-STYLE BATTLE ARENA -->
+        <div class="miscrits-arena" id="panel-tower">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <span style="font-size:11px; font-weight:800; color:#fbbf24;" id="tower-floor-badge">FLOOR 1</span>
+            <span style="font-size:11px; color:#c084fc; font-weight:700;">Boss every 10th Floor</span>
+          </div>
+
+          <div class="arena-hud">
+            <div class="hp-box">
+              <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:700;">
+                <span id="arena-hero-name">Hero</span>
+                <span style="color:var(--gold);" id="arena-hero-cp">0 CP</span>
+              </div>
+              <div class="hp-bar-track"><div class="hp-bar-fill" id="hero-hp-bar" style="width:100%;"></div></div>
+            </div>
+
+            <div class="hp-box">
+              <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:700;">
+                <span id="arena-enemy-name">Tower Mob</span>
+                <span style="color:#f87171;" id="arena-enemy-cp">250 CP</span>
+              </div>
+              <div class="hp-bar-track"><div class="hp-bar-fill" id="enemy-hp-bar" style="width:100%; background:#ef4444;"></div></div>
+            </div>
+          </div>
+
+          <div class="arena-stage">
+            <div class="combatant player" id="combatant-hero">
+              <img id="arena-hero-img" src="" alt="Hero">
+              <div class="arena-pad"></div>
+            </div>
+            <div class="combatant enemy" id="combatant-enemy">
+              <img id="arena-enemy-img" src="" alt="Enemy">
+              <div class="arena-pad"></div>
+            </div>
+          </div>
+
+          <button class="raid-btn" id="attack-btn" onclick="battleTower()">⚔️ ATTACK / RAID FLOOR</button>
+          <div id="raid-result" style="margin-top:8px; font-size:12px; text-align:center; font-weight:700; min-height:18px;"></div>
+        </div>
+
+        <!-- STAT ALLOCATION -->
         <div class="rpg-card" id="panel-stats">
           <div class="card-title">
             <span>📊 Stat Points</span>
@@ -107,34 +116,19 @@
           </div>
           <div id="stat-rows"></div>
         </div>
-
-        <!-- INFINITE TOWER RAID -->
-        <div class="tower-banner" id="panel-tower">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <div>
-              <div style="font-size:11px; color:#c084fc; font-weight:800;">INFINITE TOWER RAID</div>
-              <div style="font-size:15px; font-weight:800;" id="tower-floor-label">FLOOR 1: Goblin Scout</div>
-              <div style="font-size:12px; color:#f87171;">Boss Power: <b id="tower-req-cp">25 CP</b></div>
-            </div>
-            <div style="font-size:44px;" id="tower-monster-icon">👺</div>
-          </div>
-          <button class="raid-btn" onclick="challengeTower()">⚔️ ENTER TOWER RAID<br><span style="font-size:10px; font-weight:600;">Drop: Rarity-Based Gear (Boss every 10th Floor)</span></button>
-          <div id="raid-result" style="margin-top:8px; font-size:12px; text-align:center; font-weight:700;"></div>
-        </div>
       </div>
     </div>
 
-    <!-- BOTTOM GAME NAVIGATION -->
     <nav class="bottom-nav">
-      <button class="nav-item active" onclick="focusSection('panel-stats', this)"><span class="nav-icon">📊</span>Stats</button>
+      <button class="nav-item active" onclick="focusSection('panel-tower', this)"><span class="nav-icon">⚔️</span>Arena</button>
       <button class="nav-item" onclick="openArmory('all')"><span class="nav-icon">🎒</span>Equip (5)</button>
-      <button class="nav-item" onclick="focusSection('panel-tower', this)"><span class="nav-icon">🗼</span>Tower Raid</button>
-      <button class="nav-item" onclick="focusSection('panel-customizer', this)"><span class="nav-icon">👤</span>Look</button>
+      <button class="nav-item" onclick="focusSection('panel-stats', this)"><span class="nav-icon">📊</span>Stats</button>
+      <button class="nav-item" onclick="focusSection('panel-customizer', this)"><span class="nav-icon">👤</span>Heroes</button>
       <button class="nav-item" style="color:#4ade80;" onclick="syncProgress()"><span class="nav-icon">☁️</span>Sync</button>
     </nav>
   </div>
 
-  <!-- ARMORY / EQUIP MODAL (5-Slot Filtered, Zero Duplicates) -->
+  <!-- ARMORY DRAWER -->
   <div id="armory-modal" class="drawer hidden" onclick="if(event.target===this) closeArmory()">
     <div class="drawer-box">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
