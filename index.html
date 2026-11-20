@@ -3,8 +3,30 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Hero Gacha Tower RPG</title>
+  <title>Idle Tower Gacha RPG</title>
   <link rel="stylesheet" href="style.css">
+  <style>
+    /* Floating Damage Numbers for Idle Combat */
+    .dmg-popup {
+      position: absolute; top: 10px; font-weight: 900; font-size: 16px;
+      color: #fbbf24; text-shadow: 0 2px 4px #000; pointer-events: none;
+      animation: floatDmg 0.75s ease-out forwards; z-index: 20;
+    }
+    @keyframes floatDmg {
+      0% { opacity: 1; transform: translateY(0) scale(1); }
+      100% { opacity: 0; transform: translateY(-38px) scale(1.25); }
+    }
+    .idle-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981;
+      color: #34d399; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 800;
+    }
+    .pulse-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: #10b981;
+      animation: pulseDot 1s infinite;
+    }
+    @keyframes pulseDot { 50% { opacity: 0.2; } }
+  </style>
 </head>
 <body>
   <div id="toast">Saved!</div>
@@ -12,9 +34,9 @@
   <!-- LOGIN -->
   <div id="login-screen" style="margin:auto; width:90%; max-width:380px;">
     <div class="rpg-card" style="text-align:center; padding:24px;">
-      <div style="font-size:48px; margin-bottom:8px;">🎰</div>
-      <h2 style="color:var(--gold); margin-bottom:4px;">TOWER GACHA RPG</h2>
-      <p style="font-size:12px; color:var(--muted); margin-bottom:16px;">Enter your Student ID to summon heroes & raid the tower</p>
+      <div style="font-size:48px; margin-bottom:8px;">⚔️</div>
+      <h2 style="color:var(--gold); margin-bottom:4px;">IDLE TOWER GACHA</h2>
+      <p style="font-size:12px; color:var(--muted); margin-bottom:16px;">Enter your Student ID to start your idle tower run</p>
       <input type="text" id="student-id-input" placeholder="Student ID (e.g., 2026001)"
         style="width:100%; padding:12px; border-radius:10px; border:1px solid #374151; background:#090d16; color:white; margin-bottom:12px; text-align:center; font-size:16px;">
       <button class="raid-btn" onclick="loginStudent()">ENTER WORLD</button>
@@ -35,51 +57,14 @@
     </header>
 
     <div class="game-body">
-      <!-- LEFT / TOP: EQUIPPED HERO STAGE & GACHA SUMMON -->
-      <div class="hero-stage-col">
-        <div class="hero-stage">
-          <div class="slot-col">
-            <div class="gear-slot" id="slot-head" onclick="openArmory('head')"></div>
-            <div class="gear-slot" id="slot-weapon" onclick="openArmory('weapon')"></div>
-          </div>
-
-          <div class="character-center">
-            <div id="stage-hero-sprite" class="sprite-frame"></div>
-            <div class="pedestal-ring"></div>
-            <div id="active-char-badge" style="font-size:11px; font-weight:800; color:var(--gold); margin-top:4px;">Novice Adventurer</div>
-          </div>
-
-          <div class="slot-col">
-            <div class="gear-slot" id="slot-armor" onclick="openArmory('armor')"></div>
-            <div class="gear-slot" id="slot-boots" onclick="openArmory('boots')"></div>
-            <div class="gear-slot" id="slot-accessory" onclick="openArmory('accessory')"></div>
-          </div>
-        </div>
-
-        <!-- GACHA SUMMON & UNLOCKED HEROES -->
-        <div class="gacha-banner" style="margin-top:12px;" id="panel-gacha">
-          <div class="card-title" style="color:#e879f9;">
-            <span>🎰 Character Gacha Summon</span>
-            <span>Points: <b id="gacha-pts-display">0</b></span>
-          </div>
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
-            <button class="gacha-btn" id="roll-1-btn" onclick="rollGacha(1)">✨ Summon x1 (5 Pts)</button>
-            <button class="gacha-btn" id="roll-5-btn" style="background:linear-gradient(180deg, #f59e0b, #b45309); color:#000;" onclick="rollGacha(5)">🔥 Summon x5 (22 Pts)</button>
-          </div>
-          <div id="gacha-result-log" style="font-size:12px; text-align:center; font-weight:700; min-height:18px; margin-bottom:6px;"></div>
-          
-          <div style="font-size:11px; color:var(--muted);">Your Unlocked Characters (Tap to Deploy):</div>
-          <div class="char-roster-row" id="unlocked-chars-row"></div>
-        </div>
-      </div>
-
-      <!-- RIGHT / BOTTOM: TOWER RAID ARENA & STAT ALLOCATION -->
-      <div class="control-col" style="display:flex; flex-direction:column; gap:12px;">
-        <!-- MISCRITS-STYLE ANIMATED TOWER ARENA -->
+      <!-- LEFT / TOP: IDLE TOWER ARENA (PRIMARY VIEW) & GACHA -->
+      <div class="hero-stage-col" style="display:flex; flex-direction:column; gap:12px;">
+        
+        <!-- IDLE AUTO-BATTLE TOWER ARENA -->
         <div class="miscrits-arena" id="panel-tower">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <span style="font-size:11px; font-weight:800; color:#fbbf24;" id="tower-floor-badge">FLOOR 1</span>
-            <span style="font-size:11px; color:#c084fc; font-weight:700;">Boss every 10th Floor</span>
+            <span style="font-size:12px; font-weight:900; color:#fbbf24;" id="tower-floor-badge">FLOOR 1</span>
+            <span class="idle-badge"><span class="pulse-dot"></span> IDLE AUTO-FIGHTING</span>
           </div>
 
           <div class="arena-hud">
@@ -111,11 +96,57 @@
             </div>
           </div>
 
-          <button class="raid-btn" id="attack-btn" onclick="battleTower()">⚔️ ATTACK / RAID FLOOR</button>
-          <div id="raid-result" style="margin-top:8px; font-size:12px; text-align:center; font-weight:700; min-height:18px;"></div>
+          <!-- IDLE MODE CONTROLS -->
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
+            <button class="gacha-btn" id="auto-climb-btn" style="background:#059669;" onclick="toggleAutoClimb()">🔄 Auto-Climb: ON</button>
+            <button class="gacha-btn" style="background:#1e293b; border:1px solid #475569;" onclick="toggleIdlePause()" id="pause-idle-btn">⏸️ Pause Idle</button>
+          </div>
+          <div id="raid-result" style="margin-top:8px; font-size:12px; text-align:center; font-weight:700; min-height:18px; color:#e2e8f0;">
+            Auto-battling floor enemies...
+          </div>
         </div>
 
-        <!-- STAT ALLOCATION (SHARES SAME POINTS POOL) -->
+        <!-- CHARACTER GACHA SUMMON & DEPLOYED HEROES -->
+        <div class="gacha-banner" id="panel-gacha">
+          <div class="card-title" style="color:#e879f9;">
+            <span>🎰 Character Gacha Summon</span>
+            <span>Points: <b id="gacha-pts-display">0</b></span>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
+            <button class="gacha-btn" id="roll-1-btn" onclick="rollGacha(1)">✨ Summon x1 (5 Pts)</button>
+            <button class="gacha-btn" id="roll-5-btn" style="background:linear-gradient(180deg, #f59e0b, #b45309); color:#000;" onclick="rollGacha(5)">🔥 Summon x5 (22 Pts)</button>
+          </div>
+          <div id="gacha-result-log" style="font-size:12px; text-align:center; font-weight:700; min-height:18px; margin-bottom:6px;"></div>
+          
+          <div style="font-size:11px; color:var(--muted);">Your Gacha Characters (Tap to Deploy in Tower):</div>
+          <div class="char-roster-row" id="unlocked-chars-row"></div>
+        </div>
+      </div>
+
+      <!-- RIGHT / BOTTOM: EQUIPPED GEAR (5 SLOTS) & STAT UPGRADES -->
+      <div class="control-col" style="display:flex; flex-direction:column; gap:12px;">
+        
+        <!-- HERO PAPER-DOLL & 5 GEAR SLOTS -->
+        <div class="hero-stage">
+          <div class="slot-col">
+            <div class="gear-slot" id="slot-head" onclick="openArmory('head')"></div>
+            <div class="gear-slot" id="slot-weapon" onclick="openArmory('weapon')"></div>
+          </div>
+
+          <div class="character-center">
+            <div id="stage-hero-sprite" class="sprite-frame"></div>
+            <div class="pedestal-ring"></div>
+            <div id="active-char-badge" style="font-size:11px; font-weight:800; color:var(--gold); margin-top:4px;">---</div>
+          </div>
+
+          <div class="slot-col">
+            <div class="gear-slot" id="slot-armor" onclick="openArmory('armor')"></div>
+            <div class="gear-slot" id="slot-boots" onclick="openArmory('boots')"></div>
+            <div class="gear-slot" id="slot-accessory" onclick="openArmory('accessory')"></div>
+          </div>
+        </div>
+
+        <!-- STAT ALLOCATION (SHARES SAME CLASS POINTS) -->
         <div class="rpg-card" id="panel-stats">
           <div class="card-title">
             <span>📊 Stat Upgrade (1 Pt each)</span>
@@ -127,7 +158,7 @@
     </div>
 
     <nav class="bottom-nav">
-      <button class="nav-item active" onclick="focusSection('panel-tower', this)"><span class="nav-icon">⚔️</span>Arena</button>
+      <button class="nav-item active" onclick="focusSection('panel-tower', this)"><span class="nav-icon">⚔️</span>Idle Tower</button>
       <button class="nav-item" onclick="focusSection('panel-gacha', this)"><span class="nav-icon">🎰</span>Gacha</button>
       <button class="nav-item" onclick="openArmory('all')"><span class="nav-icon">🎒</span>Gear (5)</button>
       <button class="nav-item" onclick="focusSection('panel-stats', this)"><span class="nav-icon">📊</span>Stats</button>
