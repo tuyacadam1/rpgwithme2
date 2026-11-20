@@ -5,7 +5,6 @@ let hasUnsaved = false;
 let animFrame = 0;
 let heroAnimRow = 0; // 0 = Idle, 1 = Slash, 2 = Ultimate
 
-// Idle Combat State
 let idlePaused = false;
 let autoClimb = true;
 let heroHP = 100;
@@ -15,6 +14,10 @@ let enemyMaxHP = 100;
 let idleTurn = 'hero';
 
 const RARITY_MULT = { Common: 1.0, Rare: 1.2, Epic: 1.5, Legendary: 2.0 };
+
+const EMPTY_SLOT_SILHOUETTE = "data:image/svg+xml;utf8," + encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><circle cx="60" cy="40" r="18" fill="#334155"/><path d="M32,102 Q32,68 60,68 Q88,68 88,102 Z" fill="#334155"/><text x="60" y="55" text-anchor="middle" fill="#94a3b8" font-size="28" font-weight="bold">?</text></svg>`
+);
 
 const FALLBACK_MOB = {
   name: 'Tower Guardian',
@@ -41,7 +44,7 @@ const LOOT_TABLE = [
   { id: 'ac_crown', slot: 'accessory', icon: '💎', name: 'Heart of the Tower', rarity: 'Legendary', power: 75 }
 ];
 
-// --- 1. LOGIN & AUTO-STARTER GACHA HERO ---
+// --- 1. LOGIN (NO DEFAULT CHARACTER — PURE GACHA) ---
 async function loginStudent() {
   const studentId = document.getElementById('student-id-input').value.trim();
   if (!studentId) return alert("Enter your Student ID.");
@@ -60,14 +63,9 @@ async function loginStudent() {
       hero.avatar = { unlockedChars: [], equippedChar: null };
     }
 
-    // Give student their first Gacha character from the teacher's pool automatically if they have 0 unlocked
-    const charPool = (hero.assets || []).filter(a => a.type === 'character');
-    if (hero.avatar.unlockedChars.length === 0 && charPool.length > 0) {
-      const commons = charPool.filter(c => c.rarity === 'Common');
-      const starter = commons.length > 0 ? commons[0] : charPool[0];
-      hero.avatar.unlockedChars.push({ id: starter.assetId, stars: 1 });
-      hero.avatar.equippedChar = starter.assetId;
-      hasUnsaved = true;
+    const validIds = new Set(hero.avatar.unlockedChars.map(u => u.id));
+    if (!validIds.has(hero.avatar.equippedChar)) {
+      hero.avatar.equippedChar = hero.avatar.unlockedChars.length > 0 ? hero.avatar.unlockedChars[0].id : null;
     }
 
     document.getElementById('login-screen').classList.add('hidden');
@@ -85,16 +83,11 @@ async function loginStudent() {
 }
 
 function getEquippedCharacterObj() {
-  const charPool = (hero.assets || []).filter(a => a.type === 'character');
   if (hero.avatar.equippedChar) {
-    const found = charPool.find(a => a.assetId === hero.avatar.equippedChar);
+    const found = (hero.assets || []).find(a => a.assetId === hero.avatar.equippedChar);
     if (found) return found;
   }
-  if (charPool.length > 0) return charPool[0];
-  return {
-    assetId: 'none', rarity: 'Common', name: 'Roll Gacha to Summon!',
-    imageData: FALLBACK_MOB.imageData, meta: { cols: 1, rows: 1 }
-  };
+  return null;
 }
 
 // --- 2. SPRITE SHEET ANIMATION LOOP ---
@@ -104,10 +97,23 @@ function startSpriteAnimationLoop() {
     const charObj = getEquippedCharacterObj();
     const enemyObj = getFloorEnemy(hero.towerFloor).asset;
 
-    applySpriteFrame(document.getElementById('stage-hero-sprite'), charObj, animFrame, 0);
-    applySpriteFrame(document.getElementById('arena-hero-sprite'), charObj, animFrame, heroAnimRow);
+    if (charObj) {
+      applySpriteFrame(document.getElementById('stage-hero-sprite'), charObj, animFrame, 0);
+      applySpriteFrame(document.getElementById('arena-hero-sprite'), charObj, animFrame, heroAnimRow);
+    } else {
+      setSilhouette(document.getElementById('stage-hero-sprite'));
+      setSilhouette(document.getElementById('arena-hero-sprite'));
+    }
+
     applySpriteFrame(document.getElementById('arena-enemy-sprite'), enemyObj, animFrame, 0);
   }, 130);
+}
+
+function setSilhouette(el) {
+  if (!el) return;
+  el.style.backgroundImage = `url("${EMPTY_SLOT_SILHOUETTE}")`;
+  el.style.backgroundSize = 'contain';
+  el.style.backgroundPosition = 'center';
 }
 
 function applySpriteFrame(el, asset, frameIdx, targetRow) {
@@ -124,10 +130,10 @@ function applySpriteFrame(el, asset, frameIdx, targetRow) {
   el.style.backgroundPosition = `${xPct}% ${yPct}%`;
 }
 
-// --- 3. CONTINUOUS IDLE TOWER AUTO-BATTLE ENGINE ---
+// --- 3. CONTINUOUS IDLE TOWER AUTO-BATTLE ---
 function resetCombatRound() {
   const enemy = getFloorEnemy(hero.towerFloor);
-  heroMaxHP = getTotalCP() * 3;
+  heroMaxHP = Math.max(1, getTotalCP() * 3);
   heroHP = heroMaxHP;
   enemyMaxHP = enemy.reqCP * 3;
   enemyHP = enemyMaxHP;
@@ -136,7 +142,7 @@ function resetCombatRound() {
 }
 
 function updateHPBars() {
-  const hPct = Math.max(0, Math.min(100, (heroHP / heroMaxHP) * 100));
+  const hPct = getEquippedCharacterObj() ? Math.max(0, Math.min(100, (heroHP / heroMaxHP) * 100)) : 0;
   const ePct = Math.max(0, Math.min(100, (enemyHP / enemyMaxHP) * 100));
   document.getElementById('hero-hp-bar').style.width = hPct + '%';
   document.getElementById('enemy-hp-bar').style.width = ePct + '%';
@@ -156,17 +162,23 @@ function startIdleCombatLoop() {
   setInterval(() => {
     if (idlePaused || !hero) return;
 
+    const activeChar = getEquippedCharacterObj();
+    const resBox = document.getElementById('raid-result');
+
+    if (!activeChar) {
+      resBox.innerHTML = `<span style="color:#fbbf24;">🎰 Roll the Gacha Banner below to summon a hero for the Tower!</span>`;
+      return;
+    }
+
     const enemy = getFloorEnemy(hero.towerFloor);
     const myCP = getTotalCP();
     const heroSprite = document.getElementById('arena-hero-sprite');
     const enemySprite = document.getElementById('arena-enemy-sprite');
-    const resBox = document.getElementById('raid-result');
 
     if (idleTurn === 'hero') {
-      // Hero auto-attacks!
       const isCrit = Math.random() < 0.25;
       const dmg = Math.floor(myCP * (isCrit ? 1.5 : 1.0));
-      heroAnimRow = isCrit ? 2 : 1; // Plays Row 2 Slash or Row 3 Ultimate!
+      heroAnimRow = isCrit ? 2 : 1;
       heroSprite.classList.add('lunge-right');
 
       setTimeout(() => {
@@ -177,7 +189,7 @@ function startIdleCombatLoop() {
       }, 180);
 
       setTimeout(() => {
-        heroAnimRow = 0; // Return to Row 1 Idle
+        heroAnimRow = 0;
         heroSprite.classList.remove('lunge-right');
         enemySprite.classList.remove('hit-flash');
 
@@ -189,7 +201,6 @@ function startIdleCombatLoop() {
       }, 480);
 
     } else {
-      // Enemy auto-attacks back!
       const enemyDmg = Math.floor(enemy.reqCP * 0.95);
       enemySprite.classList.add('lunge-left');
 
@@ -205,7 +216,6 @@ function startIdleCombatLoop() {
         heroSprite.classList.remove('hit-flash');
 
         if (heroHP <= 0) {
-          // Defeated on current floor -> auto-respawn and keep idling!
           resBox.innerHTML = `<span style="color:#f87171;">⚠️ Enemy too strong! Respawning to keep idle farming...</span>`;
           resetCombatRound();
         } else {
@@ -218,14 +228,12 @@ function startIdleCombatLoop() {
 
 function handleIdleVictory(enemy) {
   const resBox = document.getElementById('raid-result');
-  
-  // Advance floor only if Auto-Climb is ON
+
   if (autoClimb) {
     hero.towerFloor++;
     hasUnsaved = true;
   }
 
-  // Roll rarity loot
   const roll = Math.random() * 100;
   let rarity = 'Common';
   if (enemy.isBoss) rarity = roll < 30 ? 'Legendary' : roll < 75 ? 'Epic' : 'Rare';
@@ -238,7 +246,7 @@ function handleIdleVictory(enemy) {
   if (!exists) {
     hero.inventory.push(drop);
     hasUnsaved = true;
-    resBox.innerHTML = `<span style="color:#4ade80;">🎉 Cleared! Found [${drop.rarity}] ${drop.name}!</span>`;
+    resBox.innerHTML = `<span style="color:#4ade80;">🎉 Cleared! Dropped [${drop.rarity}] ${drop.name}!</span>`;
   } else {
     resBox.innerHTML = `<span style="color:#38bdf8;">⚔️ Cleared! Advancing to Floor ${hero.towerFloor}...</span>`;
   }
@@ -292,7 +300,6 @@ function rollGacha(count) {
       pullResults.push(`NEW! [${pulled.rarity}] ${pulled.name}`);
     }
 
-    // Automatically deploy newly pulled hero if none equipped
     if (!hero.avatar.equippedChar) {
       hero.avatar.equippedChar = pulled.assetId;
     }
@@ -321,7 +328,7 @@ function renderUnlockedCharacters() {
   })).filter(x => x.asset);
 
   if (cards.length === 0) {
-    row.innerHTML = `<div style="font-size:12px; color:var(--gold); padding:8px;">No characters yet — click Summon above to pull your hero!</div>`;
+    row.innerHTML = `<div style="font-size:12px; color:#fbbf24; padding:8px;">No characters unlocked yet. Spend 5 Class Points above to roll your first hero!</div>`;
     return;
   }
 
@@ -340,13 +347,15 @@ function renderUnlockedCharacters() {
 
 // --- 5. COMBAT POWER & STATS ---
 function getTotalCP() {
+  const charObj = getEquippedCharacterObj();
+  if (!charObj) return 0;
+
   const s = hero.stats;
   let base = (s.str * 15) + (s.agi * 12) + (s.vit * 12) + (s.int * 15);
   Object.values(hero.equipped).forEach(item => {
     if (item) base += (item.power * 10);
   });
 
-  const charObj = getEquippedCharacterObj();
   const unlockedEntry = hero.avatar.unlockedChars.find(u => u.id === charObj.assetId);
   const stars = unlockedEntry ? unlockedEntry.stars : 1;
   const mult = (RARITY_MULT[charObj.rarity] || 1.0) + ((stars - 1) * 0.1);
@@ -458,11 +467,13 @@ function getFloorEnemy(floor) {
 
 function renderArena() {
   const enemy = getFloorEnemy(hero.towerFloor);
+  const charObj = getEquippedCharacterObj();
   document.getElementById('tower-floor-badge').innerText = enemy.isBoss ? `🔥 FLOOR ${hero.towerFloor} BOSS` : `FLOOR ${hero.towerFloor}`;
-  document.getElementById('arena-hero-name').innerText = getEquippedCharacterObj().name;
+  document.getElementById('arena-hero-name').innerText = charObj ? charObj.name : 'No Hero Deployed';
   document.getElementById('arena-hero-cp').innerText = getTotalCP().toLocaleString() + " CP";
   document.getElementById('arena-enemy-name').innerText = enemy.asset.name;
   document.getElementById('arena-enemy-cp').innerText = enemy.reqCP.toLocaleString() + " CP";
+  updateHPBars();
 }
 
 function renderAll() {
@@ -474,7 +485,9 @@ function renderAll() {
   document.getElementById('hud-pts').innerText = hero.unspentPoints;
   document.getElementById('panel-pts').innerText = hero.unspentPoints;
   document.getElementById('gacha-pts-display').innerText = hero.unspentPoints;
-  document.getElementById('active-char-badge').innerText = `[${charObj.rarity}] ${charObj.name}`;
+  document.getElementById('active-char-badge').innerText = charObj
+    ? `[${charObj.rarity}] ${charObj.name}`
+    : 'No Character (Roll Gacha!)';
 
   document.getElementById('roll-1-btn').disabled = hero.unspentPoints < 5;
   document.getElementById('roll-5-btn').disabled = hero.unspentPoints < 22;
