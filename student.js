@@ -370,8 +370,16 @@ function startIdleCombatLoop() {
         heroSprite.classList.remove('hit-flash');
 
         if (heroHP <= 0) {
-          resBox.innerHTML = `<span style="color:#f87171;">⚠️ Enemy too strong! Respawning to keep idle farming EXP...</span>`;
+          if (hero.towerFloor > 1) {
+            hero.towerFloor -= 1;
+            hasUnsaved = true;
+            if (!autoClimb) {
+              document.getElementById('auto-climb-btn').innerText = `🔁 Farming Floor ${hero.towerFloor}`;
+            }
+          }
+          resBox.innerHTML = `<span style="color:#f87171;">⚠️ Enemy too strong! Retreated to Floor ${hero.towerFloor} to farm EXP...</span>`;
           resetCombatRound();
+          renderAll();
         } else {
           idleTurn = 'hero';
         }
@@ -406,7 +414,7 @@ function handleIdleVictory(enemy) {
     hasUnsaved = true;
     resBox.innerHTML = `<span style="color:#4ade80;">🎉 +${expGain} EXP! Found [${drop.rarity}] ${drop.name}!</span>`;
   } else {
-    resBox.innerHTML = `<span style="color:#38bdf8;">⚔️ +${expGain} EXP! Advancing to Floor ${hero.towerFloor}...</span>`;
+    resBox.innerHTML = `<span style="color:#38bdf8;">⚔️ +${expGain} EXP! ${autoClimb ? `Advancing to Floor ${hero.towerFloor}...` : `Farming Floor ${hero.towerFloor}...`}</span>`;
   }
 
   if (enemy.isBoss) {
@@ -421,8 +429,25 @@ function handleIdleVictory(enemy) {
 function toggleAutoClimb() {
   autoClimb = !autoClimb;
   const btn = document.getElementById('auto-climb-btn');
-  btn.innerText = autoClimb ? '🔄 Auto-Climb: ON' : '🔁 Farm Current Floor';
-  btn.style.background = autoClimb ? '#059669' : '#d97706';
+
+  if (!autoClimb) {
+    if (hero.towerFloor > 1) {
+      hero.towerFloor -= 1;
+      hasUnsaved = true;
+    }
+    btn.innerText = `🔁 Farming Floor ${hero.towerFloor}`;
+    btn.style.background = '#d97706';
+    document.getElementById('raid-result').innerHTML =
+      `<span style="color:#fbbf24;">🔁 Stepped back to Floor ${hero.towerFloor} to farm EXP & loot!</span>`;
+  } else {
+    btn.innerText = '🔄 Auto-Climb: ON';
+    btn.style.background = '#059669';
+    document.getElementById('raid-result').innerHTML =
+      `<span style="color:#4ade80;">🔄 Auto-Climb enabled! Pushing higher floors...</span>`;
+  }
+
+  resetCombatRound();
+  renderAll();
 }
 
 function toggleIdlePause() {
@@ -548,7 +573,6 @@ function openCollection() {
           </div>
         `;
       } else {
-        // LOCKED CHARACTER -> FULL BLACK SILHOUETTE
         return `
           <div class="rpg-card" style="text-align:center; padding:10px 6px; opacity:0.8; border-color:#1e293b; background:#090d16; position:relative;">
             <div style="position:absolute; top:5px; right:6px; font-size:12px;">🔒</div>
