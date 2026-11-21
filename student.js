@@ -15,6 +15,7 @@ let enemyMaxHP = 100;
 let idleTurn = 'hero';
 
 const RARITY_MULT = { Common: 1.0, Rare: 1.2, Epic: 1.5, Legendary: 2.0 };
+const RARITY_ORDER = { Legendary: 1, Epic: 2, Rare: 3, Common: 4 };
 
 // --- ANIME THEME BGM & SFX ENGINE (WEB AUDIO SYNTHESIZER) ---
 let audioCtx = null;
@@ -22,7 +23,6 @@ let bgmPlaying = false;
 let bgmStep = 0;
 let bgmTimer = null;
 
-// Fast-paced Shonen Anime Opening Melody (150 BPM, E Minor / G Major)
 const ANIME_MELODY = [
   659.25, 0, 783.99, 987.77, 880.00, 783.99, 659.25, 587.33,
   659.25, 0, 783.99, 1174.66, 987.77, 0, 880.00, 783.99,
@@ -56,7 +56,6 @@ function startAnimeBGM() {
     const leadFreq = ANIME_MELODY[bgmStep % ANIME_MELODY.length];
     const bassFreq = ANIME_BASS[bgmStep % ANIME_BASS.length];
 
-    // Bright Anime Synth Lead
     if (leadFreq > 0) {
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
@@ -70,7 +69,6 @@ function startAnimeBGM() {
       osc.stop(now + 0.18);
     }
 
-    // Driving Rock Bassline
     if (bassFreq > 0) {
       const bOsc = audioCtx.createOscillator();
       const bGain = audioCtx.createGain();
@@ -85,7 +83,7 @@ function startAnimeBGM() {
     }
 
     bgmStep++;
-  }, 190); // 158 BPM Anime Tempo
+  }, 190);
 }
 
 function stopAnimeBGM() {
@@ -169,7 +167,7 @@ async function loginStudent() {
   const studentId = document.getElementById('student-id-input').value.trim();
   if (!studentId) return alert("Enter your Student ID.");
 
-  startAnimeBGM(); // Unlocks Web Audio on user tap and starts the anime theme!
+  startAnimeBGM();
   showToast("Summoning World...", "#3b82f6");
   try {
     const res = await fetch(API_URL, {
@@ -432,7 +430,7 @@ function toggleIdlePause() {
   document.getElementById('pause-idle-btn').innerText = idlePaused ? '▶️ Resume Idle' : '⏸️ Pause Idle';
 }
 
-// --- 5. GACHA SYSTEM (USES TEACHER CLASS POINTS) ---
+// --- 5. GACHA SYSTEM & CHARACTER COLLECTION (CODEX) ---
 function rollGacha(count) {
   const cost = count === 5 ? 22 : 5;
   if (hero.unspentPoints < cost) return alert(`Need ${cost} Class Points to summon!`);
@@ -487,10 +485,17 @@ function equipCharacter(assetId) {
 
 function renderUnlockedCharacters() {
   const row = document.getElementById('unlocked-chars-row');
+  const allCharAssets = (hero.assets || []).filter(a => a.type === 'character');
+  const unlockedIds = new Set(hero.avatar.unlockedChars.map(u => u.id));
+  const unlockedCount = allCharAssets.filter(a => unlockedIds.has(a.assetId)).length;
+
+  const badge = document.getElementById('collection-count');
+  if (badge) badge.innerText = `${unlockedCount}/${allCharAssets.length}`;
+
   const cards = hero.avatar.unlockedChars.map(u => ({
     id: u.id,
     stars: u.stars || 1,
-    asset: (hero.assets || []).find(a => a.assetId === u.id)
+    asset: allCharAssets.find(a => a.assetId === u.id)
   })).filter(x => x.asset);
 
   if (cards.length === 0) {
@@ -509,6 +514,59 @@ function renderUnlockedCharacters() {
       </div>
     `;
   }).join('');
+}
+
+function openCollection() {
+  const modal = document.getElementById('collection-modal');
+  const grid = document.getElementById('collection-grid');
+  const allCharAssets = (hero.assets || [])
+    .filter(a => a.type === 'character')
+    .sort((a, b) => (RARITY_ORDER[a.rarity] || 9) - (RARITY_ORDER[b.rarity] || 9));
+
+  const unlockedMap = {};
+  hero.avatar.unlockedChars.forEach(u => { unlockedMap[u.id] = u; });
+  const unlockedCount = allCharAssets.filter(a => unlockedMap[a.assetId]).length;
+
+  document.getElementById('modal-collection-count').innerText = `${unlockedCount}/${allCharAssets.length}`;
+
+  if (allCharAssets.length === 0) {
+    grid.innerHTML = '<p style="grid-column:1/-1; text-align:center; color:var(--muted); padding:20px;">No Gacha Characters uploaded by your teacher yet.</p>';
+  } else {
+    grid.innerHTML = allCharAssets.map(a => {
+      const unlocked = unlockedMap[a.assetId];
+      const isDeployed = hero.avatar.equippedChar === a.assetId;
+
+      if (unlocked) {
+        return `
+          <div class="rpg-card rarity-${a.rarity}" onclick="equipCharacter('${a.assetId}'); closeCollection();"
+            style="text-align:center; padding:10px 6px; cursor:pointer; position:relative; ${isDeployed ? 'box-shadow:0 0 14px rgba(245,158,11,0.65); border-color:var(--gold);' : ''}">
+            ${isDeployed ? '<div style="position:absolute; top:4px; right:4px; background:var(--gold); color:#000; font-size:8px; font-weight:900; padding:1px 5px; border-radius:6px;">ACTIVE</div>' : ''}
+            <div style="width:68px; height:68px; margin:0 auto; background-image:url(${a.imageData}); background-size:${a.meta.cols * 100}% ${a.meta.rows * 100}%; background-position:0% 0%; background-repeat:no-repeat;"></div>
+            <div style="font-size:11px; font-weight:800; margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${a.name}</div>
+            <div style="font-size:9px; color:var(--gold); font-weight:700;">[${a.rarity}] ★${unlocked.stars}</div>
+            <div style="font-size:9px; color:#4ade80; margin-top:2px;">${RARITY_MULT[a.rarity]}x Power</div>
+          </div>
+        `;
+      } else {
+        // LOCKED CHARACTER -> FULL BLACK SILHOUETTE
+        return `
+          <div class="rpg-card" style="text-align:center; padding:10px 6px; opacity:0.8; border-color:#1e293b; background:#090d16; position:relative;">
+            <div style="position:absolute; top:5px; right:6px; font-size:12px;">🔒</div>
+            <div style="width:68px; height:68px; margin:0 auto; background-image:url(${a.imageData}); background-size:${a.meta.cols * 100}% ${a.meta.rows * 100}%; background-position:0% 0%; background-repeat:no-repeat; filter:brightness(0);"></div>
+            <div style="font-size:11px; font-weight:800; margin-top:6px; color:#64748b;">???</div>
+            <div style="font-size:9px; color:#475569; font-weight:700;">[${a.rarity}] LOCKED</div>
+            <div style="font-size:9px; color:#334155; margin-top:2px;">Summon to Unlock</div>
+          </div>
+        `;
+      }
+    }).join('');
+  }
+
+  modal.classList.remove('hidden');
+}
+
+function closeCollection() {
+  document.getElementById('collection-modal').classList.add('hidden');
 }
 
 // --- 6. COMBAT POWER & AUTO-LEVELING STATS ---
