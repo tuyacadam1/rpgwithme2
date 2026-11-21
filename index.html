@@ -32,7 +32,10 @@
         <div style="font-size:11px; color:#60a5fa;">ID: <span id="hud-id">---</span> • FLOOR <span id="hud-floor">1</span></div>
       </div>
 
-      <div style="display:flex; align-items:center; gap:8px;">
+      <div style="display:flex; align-items:center; gap:6px;">
+        <button onclick="openTasksModal()" style="background:#1e3a8a; border:1px solid #3b82f6; color:#93c5fd; border-radius:8px; padding:6px 8px; font-size:11px; font-weight:800; cursor:pointer;">
+          📋 Tasks
+        </button>
         <button id="bgm-toggle-btn" onclick="toggleAnimeBGM()" style="background:#1e293b; border:1px solid #475569; color:#fbbf24; border-radius:8px; padding:6px 8px; font-size:11px; font-weight:800; cursor:pointer;">
           🎵 BGM: ON
         </button>
@@ -198,6 +201,23 @@
         <button onclick="closeCollection()" style="background:none; border:none; color:white; font-size:20px;">✕</button>
       </div>
       <div id="collection-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(105px, 1fr)); gap:10px;"></div>
+    </div>
+  </div>
+
+  <!-- CLASS TASKS & MISSING WORK MODAL -->
+  <div id="tasks-modal" class="drawer hidden" onclick="if(event.target===this) closeTasksModal()">
+    <div class="drawer-box" style="max-height:82dvh;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <div>
+          <h3 style="color:#60a5fa;">📋 Class Tasks & Points Record</h3>
+          <div style="font-size:11px; color:var(--muted);">Total Earned: <b style="color:var(--gold);" id="tasks-total-earned">0 Pts</b> • Available to Spend: <b style="color:#4ade80;" id="tasks-unspent">0 Pts</b></div>
+        </div>
+        <button onclick="closeTasksModal()" style="background:none; border:none; color:white; font-size:20px;">✕</button>
+      </div>
+
+      <div id="tasks-modal-body" style="overflow-y:auto; max-height:65dvh;">
+        <p style="text-align:center; color:var(--muted); padding:20px;">Loading task records...</p>
+      </div>
     </div>
   </div>
 
