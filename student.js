@@ -16,6 +16,125 @@ let idleTurn = 'hero';
 
 const RARITY_MULT = { Common: 1.0, Rare: 1.2, Epic: 1.5, Legendary: 2.0 };
 
+// --- ANIME THEME BGM & SFX ENGINE (WEB AUDIO SYNTHESIZER) ---
+let audioCtx = null;
+let bgmPlaying = false;
+let bgmStep = 0;
+let bgmTimer = null;
+
+// Fast-paced Shonen Anime Opening Melody (150 BPM, E Minor / G Major)
+const ANIME_MELODY = [
+  659.25, 0, 783.99, 987.77, 880.00, 783.99, 659.25, 587.33,
+  659.25, 0, 783.99, 1174.66, 987.77, 0, 880.00, 783.99,
+  659.25, 0, 783.99, 987.77, 1174.66, 1318.51, 1174.66, 987.77,
+  880.00, 783.99, 659.25, 587.33, 493.88, 0, 587.33, 659.25
+];
+const ANIME_BASS = [
+  164.81, 164.81, 164.81, 164.81, 130.81, 130.81, 130.81, 130.81,
+  196.00, 196.00, 196.00, 196.00, 146.83, 146.83, 146.83, 146.83,
+  164.81, 164.81, 164.81, 164.81, 130.81, 130.81, 130.81, 130.81,
+  196.00, 196.00, 146.83, 146.83, 164.81, 164.81, 164.81, 164.81
+];
+
+function initAudio() {
+  if (!audioCtx) {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new AudioContext();
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function startAnimeBGM() {
+  initAudio();
+  if (bgmPlaying) return;
+  bgmPlaying = true;
+  updateBGMButton();
+
+  bgmTimer = setInterval(() => {
+    if (!bgmPlaying || !audioCtx) return;
+    const now = audioCtx.currentTime;
+    const leadFreq = ANIME_MELODY[bgmStep % ANIME_MELODY.length];
+    const bassFreq = ANIME_BASS[bgmStep % ANIME_BASS.length];
+
+    // Bright Anime Synth Lead
+    if (leadFreq > 0) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(leadFreq, now);
+      gain.gain.setValueAtTime(0.045, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.17);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + 0.18);
+    }
+
+    // Driving Rock Bassline
+    if (bassFreq > 0) {
+      const bOsc = audioCtx.createOscillator();
+      const bGain = audioCtx.createGain();
+      bOsc.type = 'triangle';
+      bOsc.frequency.setValueAtTime(bassFreq, now);
+      bGain.gain.setValueAtTime(0.07, now);
+      bGain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+      bOsc.connect(bGain);
+      bGain.connect(audioCtx.destination);
+      bOsc.start(now);
+      bOsc.stop(now + 0.17);
+    }
+
+    bgmStep++;
+  }, 190); // 158 BPM Anime Tempo
+}
+
+function stopAnimeBGM() {
+  bgmPlaying = false;
+  if (bgmTimer) clearInterval(bgmTimer);
+  updateBGMButton();
+}
+
+function toggleAnimeBGM() {
+  if (bgmPlaying) stopAnimeBGM();
+  else startAnimeBGM();
+}
+
+function updateBGMButton() {
+  const btn = document.getElementById('bgm-toggle-btn');
+  if (!btn) return;
+  btn.innerText = bgmPlaying ? '🎵 BGM: ON' : '🔇 BGM: OFF';
+  btn.style.color = bgmPlaying ? '#fbbf24' : '#9ca3af';
+}
+
+function playAnimeSFX(type) {
+  if (!bgmPlaying || !audioCtx) return;
+  const now = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+
+  if (type === 'slash') {
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(520, now);
+    osc.frequency.exponentialRampToValueAtTime(110, now + 0.11);
+    gain.gain.setValueAtTime(0.05, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(now); osc.stop(now + 0.12);
+  } else if (type === 'gacha' || type === 'levelup') {
+    const notes = [523.25, 659.25, 783.99, 1046.50];
+    notes.forEach((n, idx) => {
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(n, now + idx * 0.08);
+      g.gain.setValueAtTime(0.08, now + idx * 0.08);
+      g.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.25);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(now + idx * 0.08); o.stop(now + idx * 0.08 + 0.26);
+    });
+  }
+}
+
 const EMPTY_SLOT_SILHOUETTE = "data:image/svg+xml;utf8," + encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><circle cx="60" cy="40" r="18" fill="#334155"/><path d="M32,102 Q32,68 60,68 Q88,68 88,102 Z" fill="#334155"/><text x="60" y="55" text-anchor="middle" fill="#94a3b8" font-size="28" font-weight="bold">?</text></svg>`
 );
@@ -50,6 +169,7 @@ async function loginStudent() {
   const studentId = document.getElementById('student-id-input').value.trim();
   if (!studentId) return alert("Enter your Student ID.");
 
+  startAnimeBGM(); // Unlocks Web Audio on user tap and starts the anime theme!
   showToast("Summoning World...", "#3b82f6");
   try {
     const res = await fetch(API_URL, {
@@ -149,7 +269,6 @@ function grantTowerExp(amount) {
   while (hero.stats.exp >= getExpNeeded(hero.stats.level)) {
     hero.stats.exp -= getExpNeeded(hero.stats.level);
     hero.stats.level += 1;
-    // Automatically boost all stats on level up and overwrite in-place
     hero.stats.str += 1;
     hero.stats.agi += 1;
     hero.stats.vit += 1;
@@ -159,6 +278,7 @@ function grantTowerExp(amount) {
 
   hasUnsaved = true;
   if (leveledUp) {
+    playAnimeSFX('levelup');
     showToast(`🎉 LEVEL UP! Hero reached Lv. ${hero.stats.level}!`, "#f59e0b");
     setTimeout(hideToast, 2200);
   }
@@ -215,6 +335,7 @@ function startIdleCombatLoop() {
       const dmg = Math.floor(myCP * (isCrit ? 1.5 : 1.0));
       heroAnimRow = isCrit ? 2 : 1;
       heroSprite.classList.add('lunge-right');
+      playAnimeSFX('slash');
 
       setTimeout(() => {
         enemySprite.classList.add('hit-flash');
@@ -265,7 +386,6 @@ function handleIdleVictory(enemy) {
   const resBox = document.getElementById('raid-result');
   const clearedFloor = hero.towerFloor;
 
-  // Award EXP based on floor (Boss floors give 3x EXP)
   const expGain = (50 + (clearedFloor * 25)) * (enemy.isBoss ? 3 : 1);
   grantTowerExp(expGain);
 
@@ -291,7 +411,6 @@ function handleIdleVictory(enemy) {
     resBox.innerHTML = `<span style="color:#38bdf8;">⚔️ +${expGain} EXP! Advancing to Floor ${hero.towerFloor}...</span>`;
   }
 
-  // Overwrite save automatically on Boss floors so sheet data stays clean & updated
   if (enemy.isBoss) {
     syncProgress();
     loadLeaderboard();
@@ -321,6 +440,7 @@ function rollGacha(count) {
   const charPool = (hero.assets || []).filter(a => a.type === 'character');
   if (charPool.length === 0) return alert("Your teacher hasn't uploaded Gacha Characters yet!");
 
+  playAnimeSFX('gacha');
   hero.unspentPoints -= cost;
   pointsSpentSinceSync += cost;
   hasUnsaved = true;
@@ -551,7 +671,7 @@ function focusSection(id, btn) {
   document.getElementById(id).scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
-// --- 9. CLOUD SYNC (OVERWRITES IN PLACE) & LEADERBOARD ---
+// --- 9. CLOUD SYNC & LEADERBOARD ---
 async function syncProgress() {
   showToast("☁️ Saving Hero...", "#10b981");
   try {
