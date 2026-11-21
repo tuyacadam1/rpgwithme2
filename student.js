@@ -264,7 +264,6 @@ function applySpriteFrame(el, asset, frameIdx, targetRow) {
   const xPct = cols > 1 ? (col / (cols - 1)) * 100 : 0;
 
   if (rows > 1) {
-    // Zoom vertical scale (128%) to crop out top row header text & bottom frame numbers[cite: 5]
     const zoom = 1.28;
     el.style.backgroundSize = `${cols * 100}% ${rows * 128}%`;
     const rowTop = row / rows;
@@ -875,6 +874,72 @@ function startPointsRefreshLoop() {
       }
     } catch (_) {}
   }, 15000);
+}
+
+// --- 10. STUDENT TASK & MISSING WORK CHECKER ---
+async function openTasksModal() {
+  if (!hero) return;
+  const modal = document.getElementById('tasks-modal');
+  const body = document.getElementById('tasks-modal-body');
+  document.getElementById('tasks-unspent').innerText = `${hero.unspentPoints} Pts`;
+  body.innerHTML = '<p style="text-align:center; color:var(--muted); padding:20px;">Checking class records...</p>';
+  modal.classList.remove('hidden');
+
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'getStudentTasks',
+        classId: hero.classId,
+        studentId: hero.studentId
+      })
+    });
+    const json = await res.json();
+    if (json.status === 'error') throw new Error(json.message);
+
+    const { completed, missing, totalEarned } = json.data;
+    document.getElementById('tasks-total-earned').innerText = `${totalEarned} Pts`;
+
+    let html = '';
+
+    html += `<div style="font-size:12px; font-weight:900; color:#f87171; margin:6px 0 8px;">⚠️ MISSING TASKS (${missing.length})</div>`;
+    if (missing.length === 0) {
+      html += `<div class="rpg-card" style="text-align:center; color:#4ade80; font-size:12px; margin-bottom:14px; border-color:#065f46;">🎉 No missing tasks! You are all caught up!</div>`;
+    } else {
+      html += missing.map(m => `
+        <div class="rpg-card" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-color:#991b1b; background:rgba(153,27,27,0.18);">
+          <div>
+            <div style="font-weight:800; font-size:13px; color:#fca5a5;">❌ ${m.taskName}</div>
+            <div style="font-size:10px; color:var(--muted);">Assigned on ${m.date}</div>
+          </div>
+          <span style="background:#7f1d1d; color:#fecaca; font-size:11px; font-weight:800; padding:3px 8px; border-radius:8px;">Missing (${m.points} Pts)</span>
+        </div>
+      `).join('');
+    }
+
+    html += `<div style="font-size:12px; font-weight:900; color:#4ade80; margin:14px 0 8px;">✅ CREDITED TASKS (${completed.length})</div>`;
+    if (completed.length === 0) {
+      html += `<p style="text-align:center; color:var(--muted); font-size:12px; padding:12px;">No tasks credited yet.</p>`;
+    } else {
+      html += completed.map(c => `
+        <div class="rpg-card" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-color:#1e293b;">
+          <div>
+            <div style="font-weight:800; font-size:13px; color:#e2e8f0;">${c.taskName}</div>
+            <div style="font-size:10px; color:var(--muted);">${c.date}</div>
+          </div>
+          <span style="color:var(--gold); font-weight:900; font-size:13px;">+${c.points} Pts</span>
+        </div>
+      `).join('');
+    }
+
+    body.innerHTML = html;
+  } catch (err) {
+    body.innerHTML = `<p style="text-align:center; color:#f87171; padding:20px;">Error: ${err.message}</p>`;
+  }
+}
+
+function closeTasksModal() {
+  document.getElementById('tasks-modal').classList.add('hidden');
 }
 
 function showToast(msg, bg) {
