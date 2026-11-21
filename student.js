@@ -1,5 +1,5 @@
 (() => {
-const API_URL = "https://script.google.com/macros/s/AKfycbxPN7yKyqOwyyxIarj2BTkIcuMOomlfc52zCo2vK4AcVWg8TRofqKaRR-kj1yKiLiENWA/exec";
+  const API_URL = "https://script.google.com/macros/s/AKfycbxPN7yKyqOwyyxIarj2BTkIcuMOomlfc52zCo2vK4AcVWg8TRofqKaRR-kj1yKiLiENWA/exec";
 
   let hero = null;
   let hasUnsaved = false;
@@ -149,18 +149,44 @@ const API_URL = "https://script.google.com/macros/s/AKfycbxPN7yKyqOwyyxIarj2BTkI
     meta: { cols: 1, rows: 1 }
   };
 
-  const LOOT_TABLE = [
-    { id: 'w_iron', slot: 'weapon', icon: '🗡️', name: 'Iron Broadsword', rarity: 'Common', power: 8 },
-    { id: 'h_cap', slot: 'head', icon: '🪖', name: 'Scout Hood', rarity: 'Common', power: 6 },
-    { id: 'a_leather', slot: 'armor', icon: '🦺', name: 'Brigandine Vest', rarity: 'Common', power: 10 },
-    { id: 'b_boots', slot: 'boots', icon: '👢', name: 'Swift Greaves', rarity: 'Rare', power: 15 },
-    { id: 'w_arcane', slot: 'weapon', icon: '⚔️', name: 'Enchanted Greatsword', rarity: 'Rare', power: 22 },
-    { id: 'h_circlet', slot: 'head', icon: '👑', name: 'Scholar Circlet', rarity: 'Rare', power: 18 },
-    { id: 'a_guardian', slot: 'armor', icon: '🛡️', name: 'Guardian Plate Tunic', rarity: 'Epic', power: 38 },
-    { id: 'ac_pendant', slot: 'accessory', icon: '🔮', name: 'Crystal Pendant', rarity: 'Epic', power: 32 },
-    { id: 'w_excal', slot: 'weapon', icon: '🔥', name: 'Solaris Dragonblade', rarity: 'Legendary', power: 85 },
-    { id: 'ac_crown', slot: 'accessory', icon: '💎', name: 'Heart of the Tower', rarity: 'Legendary', power: 75 }
+  // --- INFINITE FLOOR-SCALED LOOT GENERATOR ---
+  const SLOT_CONFIGS = [
+    { slot: 'head', icon: '🪖', baseName: 'Helm', basePower: 6 },
+    { slot: 'weapon', icon: '⚔️', baseName: 'Blade', basePower: 9 },
+    { slot: 'armor', icon: '🛡️', baseName: 'Plate', basePower: 10 },
+    { slot: 'boots', icon: '👢', baseName: 'Greaves', basePower: 7 },
+    { slot: 'accessory', icon: '🔮', baseName: 'Relic', basePower: 8 }
   ];
+
+  const RARITY_CONFIGS = {
+    Common: { scale: 1.0, bonus: 0 },
+    Rare: { scale: 1.4, bonus: 8 },
+    Epic: { scale: 1.9, bonus: 22 },
+    Legendary: { scale: 2.6, bonus: 45 }
+  };
+
+  function generateFloorLoot(floor, rarity) {
+    const f = Math.max(1, Math.floor(Number(floor) || 1));
+    const sCfg = SLOT_CONFIGS[Math.floor(Math.random() * SLOT_CONFIGS.length)];
+    const rCfg = RARITY_CONFIGS[rarity] || RARITY_CONFIGS.Common;
+
+    let prefix = 'Novice';
+    if (f >= 100) prefix = 'Godslayer';
+    else if (f >= 50) prefix = 'Celestial';
+    else if (f >= 25) prefix = 'Abyssal';
+    else if (f >= 10) prefix = 'Tempered';
+
+    const power = Math.floor((sCfg.basePower + rCfg.bonus) + (f * rCfg.scale));
+    return {
+      id: `${sCfg.slot}_${rarity}_${f}`,
+      slot: sCfg.slot,
+      icon: sCfg.icon,
+      name: `${prefix} ${sCfg.baseName} (F${f})`,
+      rarity: rarity,
+      floor: f,
+      power: power
+    };
+  }
 
   // --- 1. LOGIN ---
   async function loginStudent() {
@@ -425,14 +451,23 @@ const API_URL = "https://script.google.com/macros/s/AKfycbxPN7yKyqOwyyxIarj2BTkI
     if (enemy.isBoss) rarity = roll < 30 ? 'Legendary' : roll < 75 ? 'Epic' : 'Rare';
     else rarity = roll < 4 ? 'Legendary' : roll < 18 ? 'Epic' : roll < 50 ? 'Rare' : 'Common';
 
-    const pool = LOOT_TABLE.filter(i => i.rarity === rarity);
-    const drop = pool[Math.floor(Math.random() * pool.length)];
+    const drop = generateFloorLoot(clearedFloor, rarity);
+    // Replace only if no item of same (slot + rarity) exists OR new drop is stronger
+    const existingIdx = hero.inventory.findIndex(i => i.slot === drop.slot && i.rarity === drop.rarity);
 
-    const exists = hero.inventory.some(i => i.id === drop.id);
-    if (!exists) {
+    if (existingIdx === -1) {
       hero.inventory.push(drop);
       hasUnsaved = true;
-      resBox.innerHTML = `<span style="color:#4ade80;">🎉 +${expGain} EXP! Found [${drop.rarity}] ${drop.name}!</span>`;
+      resBox.innerHTML = `<span style="color:#4ade80;">🎉 +${expGain} EXP! Found [${drop.rarity}] ${drop.name} (+${drop.power})!</span>`;
+    } else if (drop.power > hero.inventory[existingIdx].power) {
+      const oldEq = hero.equipped[drop.slot];
+      hero.inventory[existingIdx] = drop;
+      // If that slot + rarity was currently equipped, auto-upgrade the equipped item too
+      if (oldEq && oldEq.slot === drop.slot && oldEq.rarity === drop.rarity) {
+        hero.equipped[drop.slot] = drop;
+      }
+      hasUnsaved = true;
+      resBox.innerHTML = `<span style="color:#4ade80;">⬆️ +${expGain} EXP! Upgraded [${drop.rarity}] ${drop.name} (+${drop.power})!</span>`;
     } else {
       resBox.innerHTML = `<span style="color:#38bdf8;">⚔️ +${expGain} EXP! ${autoClimb ? `Advancing to Floor ${hero.towerFloor}...` : `Farming Floor ${hero.towerFloor}...`}</span>`;
     }
@@ -659,7 +694,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbxPN7yKyqOwyyxIarj2BTkI
     }).join('');
   }
 
-  // --- 7. 5-SLOT GEAR & ARMORY ---
+  // --- 7. 5-SLOT GEAR & ARMORY (SHOWS "✓ EQUIPPED" WHEN WORN) ---
   function renderSlots() {
     const slotDefs = [
       { key: 'head', defIcon: '🪖', label: 'Head' },
@@ -676,7 +711,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbxPN7yKyqOwyyxIarj2BTkI
       el.innerHTML = `
         <div class="gear-icon">${item ? item.icon : s.defIcon}</div>
         <div class="gear-name">${item ? item.name : s.label}</div>
-        <div class="gear-stat">${item ? `[${item.rarity}] +${item.power}` : 'Equip'}</div>
+        <div class="gear-stat">${item ? `[${item.rarity}] +${item.power}` : 'Empty'}</div>
       `;
     });
   }
@@ -686,19 +721,30 @@ const API_URL = "https://script.google.com/macros/s/AKfycbxPN7yKyqOwyyxIarj2BTkI
     const list = document.getElementById('armory-items');
     document.getElementById('armory-title').innerText = slotFilter === 'all' ? '🎒 All Gear' : `🎒 ${slotFilter.toUpperCase()} Slot`;
 
-    const items = slotFilter === 'all' ? hero.inventory : hero.inventory.filter(i => i.slot === slotFilter);
-    list.innerHTML = items.map(item => `
-      <div class="rpg-card rarity-${item.rarity}" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-        <div style="display:flex; align-items:center; gap:10px;">
-          <span style="font-size:26px;">${item.icon}</span>
-          <div>
-            <div style="font-weight:800; font-size:13px;">${item.name}</div>
-            <div style="font-size:11px; color:var(--muted);">[${item.rarity}] ${item.slot.toUpperCase()} • +${item.power * 10} CP</div>
+    const items = (slotFilter === 'all' ? hero.inventory : hero.inventory.filter(i => i.slot === slotFilter))
+      .slice()
+      .sort((a, b) => b.power - a.power);
+
+    list.innerHTML = items.map(item => {
+      const curEquipped = hero.equipped[item.slot];
+      const isEquipped = curEquipped && (curEquipped.id === item.id || (curEquipped.slot === item.slot && curEquipped.rarity === item.rarity));
+
+      return `
+        <div class="rpg-card rarity-${item.rarity}" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; ${isEquipped ? 'border-color:#4ade80; background:rgba(16,185,129,0.12);' : ''}">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:26px;">${item.icon}</span>
+            <div>
+              <div style="font-weight:800; font-size:13px;">${item.name}</div>
+              <div style="font-size:11px; color:var(--muted);">[${item.rarity}] ${item.slot.toUpperCase()} • +${(item.power * 10).toLocaleString()} CP</div>
+            </div>
           </div>
+          ${isEquipped
+            ? `<button class="plus-btn" disabled style="background:#065f46; color:#6ee7b7; border:1px solid #10b981; cursor:default;">✓ EQUIPPED</button>`
+            : `<button class="plus-btn" onclick="equipGear('${item.id}')">EQUIP</button>`
+          }
         </div>
-        <button class="plus-btn" onclick="equipGear('${item.id}')">EQUIP</button>
-      </div>
-    `).join('') || '<p style="text-align:center; color:var(--muted); padding:20px;">No gear unlocked yet. Let your hero idle in the Tower!</p>';
+      `;
+    }).join('') || '<p style="text-align:center; color:var(--muted); padding:20px;">No gear unlocked yet. Let your hero idle in the Tower!</p>';
 
     modal.classList.remove('hidden');
   }
@@ -711,6 +757,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbxPN7yKyqOwyyxIarj2BTkI
     hero.equipped[item.slot] = item;
     hasUnsaved = true;
     closeArmory();
+    resetCombatRound();
     renderAll();
   }
 
@@ -792,7 +839,6 @@ const API_URL = "https://script.google.com/macros/s/AKfycbxPN7yKyqOwyyxIarj2BTkI
       const json = await res.json();
       if (json.status === 'error') throw new Error(json.message);
 
-      // Snap local state to server-verified values
       hero.unspentPoints = Number(json.data.unspentPoints) || 0;
       if (json.data.avatar) hero.avatar = json.data.avatar;
       if (json.data.stats) hero.stats = json.data.stats;
@@ -954,7 +1000,6 @@ const API_URL = "https://script.google.com/macros/s/AKfycbxPN7yKyqOwyyxIarj2BTkI
     if (hasUnsaved) { e.preventDefault(); e.returnValue = ''; }
   });
 
-  // Expose only UI click handlers to global scope; internal state stays hidden from DevTools console
   Object.assign(window, {
     loginStudent,
     toggleAnimeBGM,
