@@ -95,7 +95,7 @@
           </div>
         </div>
 
-        <!-- CHARACTER GACHA SUMMON & COLLECTION BUTTON -->
+        <!-- CHARACTER GACHA SUMMON, PITY COUNTER & COLLECTION -->
         <div class="gacha-banner" id="panel-gacha">
           <div class="card-title" style="color:#e879f9; align-items:center;">
             <span>🎰 Character Gacha</span>
@@ -106,10 +106,18 @@
               </button>
             </div>
           </div>
+
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
             <button class="gacha-btn" id="roll-1-btn" onclick="rollGacha(1)">✨ Summon x1 (5 Pts)</button>
             <button class="gacha-btn" id="roll-5-btn" style="background:linear-gradient(180deg, #f59e0b, #b45309); color:#000;" onclick="rollGacha(5)">🔥 Summon x5 (22 Pts)</button>
           </div>
+
+          <!-- PITY PROGRESS BAR -->
+          <div id="gacha-pity-bar" style="display:flex; justify-content:space-between; font-size:11px; background:#090d16; border:1px solid #1e293b; border-radius:8px; padding:6px 10px; margin-bottom:8px; color:#cbd5e1;">
+            <span>⚡ Epic+ Pity: <b id="pity-epic-text" style="color:#c084fc;">0/10</b></span>
+            <span>🔥 Legendary Pity: <b id="pity-leg-text" style="color:#fbbf24;">0/25</b></span>
+          </div>
+
           <div id="gacha-result-log" style="font-size:12px; text-align:center; font-weight:700; min-height:18px; margin-bottom:6px;"></div>
           
           <div style="font-size:11px; color:var(--muted);">Your Unlocked Heroes (Tap to Deploy in Tower):</div>
@@ -190,7 +198,7 @@
     </div>
   </div>
 
-  <!-- CHARACTER COLLECTION MODAL (LOCKED = FULL BLACK SILHOUETTE) -->
+  <!-- CHARACTER COLLECTION MODAL -->
   <div id="collection-modal" class="drawer hidden" onclick="if(event.target===this) closeCollection()">
     <div class="drawer-box" style="max-height:82dvh;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
