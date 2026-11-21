@@ -1,10 +1,12 @@
 (() => {
   const API_URL = "https://script.google.com/macros/s/AKfycbxPN7yKyqOwyyxIarj2BTkIcuMOomlfc52zCo2vK4AcVWg8TRofqKaRR-kj1yKiLiENWA/exec";
-
+  
   let hero = null;
   let hasUnsaved = false;
-  let animFrame = 0;
-  let heroAnimRow = 0; // 0 = Idle, 1 = Slash, 2 = Ultimate
+  let idleAnimFrame = 0;
+  let actionAnimFrame = 0;
+  let isPlayingAction = false;
+  let heroAnimRow = 0; // 0 = Idle, 1 = Attack, 2 = Ultimate
 
   let idlePaused = false;
   let autoClimb = true;
@@ -240,23 +242,53 @@
     return null;
   }
 
-  // --- 2. SPRITE SHEET ANIMATION LOOP ---
+  // --- 2. SYNCHRONIZED SPRITE SHEET ANIMATION LOOP ---
+  function triggerHeroAction(rowIdx, frameSpeedMs, onComplete) {
+    heroAnimRow = rowIdx;
+    actionAnimFrame = 0;
+    isPlayingAction = true;
+
+    const charObj = getEquippedCharacterObj();
+    const cols = Math.max(1, charObj?.meta?.cols || 6);
+
+    // Always start cleanly on Frame 1 (col 0) of Attack / Ultimate
+    if (charObj) {
+      applySpriteFrame(document.getElementById('arena-hero-sprite'), charObj, 0, heroAnimRow);
+    }
+
+    const actionTimer = setInterval(() => {
+      actionAnimFrame++;
+      if (actionAnimFrame >= cols) {
+        clearInterval(actionTimer);
+        isPlayingAction = false;
+        heroAnimRow = 0;
+        idleAnimFrame = 0;
+        if (onComplete) onComplete();
+      } else if (charObj) {
+        applySpriteFrame(document.getElementById('arena-hero-sprite'), charObj, actionAnimFrame, heroAnimRow);
+      }
+    }, frameSpeedMs);
+  }
+
   function startSpriteAnimationLoop() {
+    // Relaxed 180ms loop (~5.5 FPS) so idle breathing & aura details are easy to see
     setInterval(() => {
-      animFrame++;
+      idleAnimFrame++;
       const charObj = getEquippedCharacterObj();
       const enemyObj = getFloorEnemy(hero.towerFloor).asset;
 
       if (charObj) {
-        applySpriteFrame(document.getElementById('stage-hero-sprite'), charObj, animFrame, 0);
-        applySpriteFrame(document.getElementById('arena-hero-sprite'), charObj, animFrame, heroAnimRow);
+        applySpriteFrame(document.getElementById('stage-hero-sprite'), charObj, idleAnimFrame, 0);
+        if (!isPlayingAction) {
+          applySpriteFrame(document.getElementById('arena-hero-sprite'), charObj, idleAnimFrame, 0);
+        }
       } else {
         setSilhouette(document.getElementById('stage-hero-sprite'));
         setSilhouette(document.getElementById('arena-hero-sprite'));
       }
 
-      applySpriteFrame(document.getElementById('arena-enemy-sprite'), enemyObj, animFrame, 0);
-    }, 130);
+      applySpriteFrame(document.getElementById('arena-enemy-sprite'), enemyObj, idleAnimFrame, 0);
+    }, 180);
   }
 
   function setSilhouette(el) {
@@ -336,6 +368,8 @@
     heroHP = heroMaxHP;
     enemyMaxHP = enemy.reqCP * 3;
     enemyHP = enemyMaxHP;
+    isPlayingAction = false;
+    heroAnimRow = 0;
     idleTurn = 'hero';
     updateHPBars();
   }
@@ -359,7 +393,7 @@
 
   function startIdleCombatLoop() {
     setInterval(() => {
-      if (idlePaused || !hero) return;
+      if (idlePaused || !hero || idleTurn === 'animating') return;
 
       const activeChar = getEquippedCharacterObj();
       const resBox = document.getElementById('raid-result');
@@ -377,19 +411,22 @@
       if (idleTurn === 'hero') {
         const isCrit = Math.random() < 0.25;
         const dmg = Math.floor(myCP * (isCrit ? 1.5 : 1.0));
-        heroAnimRow = isCrit ? 2 : 1;
+        const targetRow = isCrit ? 2 : 1; // Row 2 = Ultimate (Crit), Row 1 = Attack
+        const frameMs = isCrit ? 165 : 140; // Full 6 frames play smoothly before reset
+
+        idleTurn = 'animating';
         heroSprite.classList.add('lunge-right');
         playAnimeSFX('slash');
 
+        // Trigger impact on Frame 4 when the strike/ultimate lands
         setTimeout(() => {
           enemySprite.classList.add('hit-flash');
           enemyHP -= dmg;
           spawnFloatingDamage('combatant-enemy', dmg, isCrit ? '#fbbf24' : '#ffffff');
           updateHPBars();
-        }, 180);
+        }, frameMs * 3);
 
-        setTimeout(() => {
-          heroAnimRow = 0;
+        triggerHeroAction(targetRow, frameMs, () => {
           heroSprite.classList.remove('lunge-right');
           enemySprite.classList.remove('hit-flash');
 
@@ -398,10 +435,11 @@
           } else {
             idleTurn = 'enemy';
           }
-        }, 480);
+        });
 
-      } else {
+      } else if (idleTurn === 'enemy') {
         const enemyDmg = Math.floor(enemy.reqCP * 0.95);
+        idleTurn = 'animating';
         enemySprite.classList.add('lunge-left');
 
         setTimeout(() => {
@@ -409,7 +447,7 @@
           heroHP -= enemyDmg;
           spawnFloatingDamage('combatant-hero', enemyDmg, '#f87171');
           updateHPBars();
-        }, 180);
+        }, 200);
 
         setTimeout(() => {
           enemySprite.classList.remove('lunge-left');
@@ -429,7 +467,7 @@
           } else {
             idleTurn = 'hero';
           }
-        }, 480);
+        }, 560);
       }
     }, 1150);
   }
@@ -452,7 +490,6 @@
     else rarity = roll < 4 ? 'Legendary' : roll < 18 ? 'Epic' : roll < 50 ? 'Rare' : 'Common';
 
     const drop = generateFloorLoot(clearedFloor, rarity);
-    // Replace only if no item of same (slot + rarity) exists OR new drop is stronger
     const existingIdx = hero.inventory.findIndex(i => i.slot === drop.slot && i.rarity === drop.rarity);
 
     if (existingIdx === -1) {
@@ -462,7 +499,6 @@
     } else if (drop.power > hero.inventory[existingIdx].power) {
       const oldEq = hero.equipped[drop.slot];
       hero.inventory[existingIdx] = drop;
-      // If that slot + rarity was currently equipped, auto-upgrade the equipped item too
       if (oldEq && oldEq.slot === drop.slot && oldEq.rarity === drop.rarity) {
         hero.equipped[drop.slot] = drop;
       }
@@ -694,7 +730,7 @@
     }).join('');
   }
 
-  // --- 7. 5-SLOT GEAR & ARMORY (SHOWS "✓ EQUIPPED" WHEN WORN) ---
+  // --- 7. 5-SLOT GEAR & ARMORY ---
   function renderSlots() {
     const slotDefs = [
       { key: 'head', defIcon: '🪖', label: 'Head' },
