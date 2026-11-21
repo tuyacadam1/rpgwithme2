@@ -31,9 +31,15 @@
         </div>
         <div style="font-size:11px; color:#60a5fa;">ID: <span id="hud-id">---</span> • FLOOR <span id="hud-floor">1</span></div>
       </div>
-      <div style="text-align:right;">
-        <div class="cp-val"><span id="hud-cp">0</span> CP</div>
-        <div class="pts-pill">★ <span id="hud-pts">0</span> Gacha Points</div>
+
+      <div style="display:flex; align-items:center; gap:8px;">
+        <button id="bgm-toggle-btn" onclick="toggleAnimeBGM()" style="background:#1e293b; border:1px solid #475569; color:#fbbf24; border-radius:8px; padding:6px 8px; font-size:11px; font-weight:800; cursor:pointer;">
+          🎵 BGM: ON
+        </button>
+        <div style="text-align:right;">
+          <div class="cp-val"><span id="hud-cp">0</span> CP</div>
+          <div class="pts-pill">★ <span id="hud-pts">0</span> Gacha Pts</div>
+        </div>
       </div>
     </header>
 
@@ -86,11 +92,16 @@
           </div>
         </div>
 
-        <!-- CHARACTER GACHA SUMMON & DEPLOYED HEROES -->
+        <!-- CHARACTER GACHA SUMMON & COLLECTION BUTTON -->
         <div class="gacha-banner" id="panel-gacha">
-          <div class="card-title" style="color:#e879f9;">
-            <span>🎰 Character Gacha Summon</span>
-            <span>Class Points: <b id="gacha-pts-display">0</b></span>
+          <div class="card-title" style="color:#e879f9; align-items:center;">
+            <span>🎰 Character Gacha</span>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span>Pts: <b id="gacha-pts-display">0</b></span>
+              <button class="plus-btn" style="background:#9333ea; font-size:11px; padding:4px 9px;" onclick="openCollection()">
+                📖 Collection (<span id="collection-count">0/0</span>)
+              </button>
+            </div>
           </div>
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
             <button class="gacha-btn" id="roll-1-btn" onclick="rollGacha(1)">✨ Summon x1 (5 Pts)</button>
@@ -98,7 +109,7 @@
           </div>
           <div id="gacha-result-log" style="font-size:12px; text-align:center; font-weight:700; min-height:18px; margin-bottom:6px;"></div>
           
-          <div style="font-size:11px; color:var(--muted);">Your Gacha Characters (Tap to Deploy in Tower):</div>
+          <div style="font-size:11px; color:var(--muted);">Your Unlocked Heroes (Tap to Deploy in Tower):</div>
           <div class="char-roster-row" id="unlocked-chars-row"></div>
         </div>
       </div>
@@ -141,7 +152,7 @@
           </div>
         </div>
 
-        <!-- TOWER RAID LEADERBOARD (VISIBLE ON SCREEN) -->
+        <!-- TOWER RAID LEADERBOARD -->
         <div class="rpg-card" id="panel-leaderboard">
           <div class="card-title">
             <span>🏆 Tower Raid Leaderboard</span>
@@ -158,6 +169,7 @@
     <nav class="bottom-nav">
       <button class="nav-item active" onclick="focusSection('panel-tower', this)"><span class="nav-icon">⚔️</span>Tower</button>
       <button class="nav-item" onclick="focusSection('panel-gacha', this)"><span class="nav-icon">🎰</span>Gacha</button>
+      <button class="nav-item" onclick="openCollection()"><span class="nav-icon">📖</span>Index</button>
       <button class="nav-item" onclick="openArmory('all')"><span class="nav-icon">🎒</span>Gear</button>
       <button class="nav-item" onclick="focusSection('panel-leaderboard', this); loadLeaderboard();"><span class="nav-icon">🏆</span>Rank</button>
       <button class="nav-item" style="color:#4ade80;" onclick="syncProgress()"><span class="nav-icon">☁️</span>Sync</button>
@@ -172,6 +184,20 @@
         <button onclick="closeArmory()" style="background:none; border:none; color:white; font-size:20px;">✕</button>
       </div>
       <div id="armory-items"></div>
+    </div>
+  </div>
+
+  <!-- CHARACTER COLLECTION MODAL (LOCKED = FULL BLACK SILHOUETTE) -->
+  <div id="collection-modal" class="drawer hidden" onclick="if(event.target===this) closeCollection()">
+    <div class="drawer-box" style="max-height:82dvh;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <div>
+          <h3 style="color:#e879f9;">📖 Character Collection (<span id="modal-collection-count">0/0</span>)</h3>
+          <div style="font-size:11px; color:var(--muted);">Summon via Gacha to unlock silhouettes • Tap unlocked heroes to deploy</div>
+        </div>
+        <button onclick="closeCollection()" style="background:none; border:none; color:white; font-size:20px;">✕</button>
+      </div>
+      <div id="collection-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(105px, 1fr)); gap:10px;"></div>
     </div>
   </div>
 
