@@ -1,6 +1,6 @@
 (() => {
   const API_URL = "https://script.google.com/macros/s/AKfycbxPN7yKyqOwyyxIarj2BTkIcuMOomlfc52zCo2vK4AcVWg8TRofqKaRR-kj1yKiLiENWA/exec";
-  
+
   let hero = null;
   let hasUnsaved = false;
   let idleAnimFrame = 0;
@@ -208,8 +208,11 @@
       hero = json.data;
 
       if (!hero.avatar || !Array.isArray(hero.avatar.unlockedChars)) {
-        hero.avatar = { unlockedChars: [], equippedChar: null };
+        hero.avatar = { unlockedChars: [], equippedChar: null, pityEpic: 0, pityLeg: 0 };
       }
+      hero.avatar.pityEpic = Number(hero.avatar.pityEpic) || 0;
+      hero.avatar.pityLeg = Number(hero.avatar.pityLeg) || 0;
+
       if (!hero.stats.level) hero.stats.level = 1;
       if (hero.stats.exp === undefined) hero.stats.exp = 0;
 
@@ -251,7 +254,6 @@
     const charObj = getEquippedCharacterObj();
     const cols = Math.max(1, charObj?.meta?.cols || 6);
 
-    // Always start cleanly on Frame 1 (col 0) of Attack / Ultimate
     if (charObj) {
       applySpriteFrame(document.getElementById('arena-hero-sprite'), charObj, 0, heroAnimRow);
     }
@@ -271,7 +273,6 @@
   }
 
   function startSpriteAnimationLoop() {
-    // Relaxed 180ms loop (~5.5 FPS) so idle breathing & aura details are easy to see
     setInterval(() => {
       idleAnimFrame++;
       const charObj = getEquippedCharacterObj();
@@ -411,14 +412,13 @@
       if (idleTurn === 'hero') {
         const isCrit = Math.random() < 0.25;
         const dmg = Math.floor(myCP * (isCrit ? 1.5 : 1.0));
-        const targetRow = isCrit ? 2 : 1; // Row 2 = Ultimate (Crit), Row 1 = Attack
-        const frameMs = isCrit ? 165 : 140; // Full 6 frames play smoothly before reset
+        const targetRow = isCrit ? 2 : 1;
+        const frameMs = isCrit ? 165 : 140;
 
         idleTurn = 'animating';
         heroSprite.classList.add('lunge-right');
         playAnimeSFX('slash');
 
-        // Trigger impact on Frame 4 when the strike/ultimate lands
         setTimeout(() => {
           enemySprite.classList.add('hit-flash');
           enemyHP -= dmg;
@@ -546,7 +546,7 @@
     document.getElementById('pause-idle-btn').innerText = idlePaused ? '▶️ Resume Idle' : '⏸️ Pause Idle';
   }
 
-  // --- 5. SERVER-AUTHORITATIVE GACHA SYSTEM ---
+  // --- 5. SERVER-AUTHORITATIVE GACHA SYSTEM WITH PITY ---
   let isRollingGacha = false;
   async function rollGacha(count) {
     if (isRollingGacha) return;
@@ -838,6 +838,11 @@
     document.getElementById('active-char-badge').innerText = charObj
       ? `[${charObj.rarity}] ${charObj.name}`
       : 'No Character (Roll Gacha!)';
+
+    const epicEl = document.getElementById('pity-epic-text');
+    const legEl = document.getElementById('pity-leg-text');
+    if (epicEl) epicEl.innerText = `${hero.avatar.pityEpic || 0}/10`;
+    if (legEl) legEl.innerText = `${hero.avatar.pityLeg || 0}/25`;
 
     document.getElementById('roll-1-btn').disabled = hero.unspentPoints < 5;
     document.getElementById('roll-5-btn').disabled = hero.unspentPoints < 22;
