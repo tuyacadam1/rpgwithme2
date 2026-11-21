@@ -215,7 +215,7 @@ function getEquippedCharacterObj() {
   return null;
 }
 
-// --- 2. SPRITE SHEET ANIMATION LOOP ---
+// --- 2. SPRITE SHEET ANIMATION LOOP (AUTO-CROPS ROW HEADER & NUMBER LABELS) ---
 function startSpriteAnimationLoop() {
   setInterval(() => {
     animFrame++;
@@ -241,6 +241,18 @@ function setSilhouette(el) {
   el.style.backgroundPosition = 'center';
 }
 
+function getThumbSpriteStyle(asset) {
+  const cols = Math.max(1, asset.meta?.cols || 1);
+  const rows = Math.max(1, asset.meta?.rows || 1);
+  if (rows > 1) {
+    const zoom = 1.28;
+    const rowCenter = 0.54 / rows;
+    const yPct = Math.max(0, Math.min(100, ((rowCenter - 0.5 / (rows * zoom)) / (1 - 1 / (rows * zoom))) * 100));
+    return `background-image:url(${asset.imageData}); background-size:${cols * 100}% ${rows * 128}%; background-position:0% ${yPct}%; background-repeat:no-repeat;`;
+  }
+  return `background-image:url(${asset.imageData}); background-size:${cols * 100}% 100%; background-position:0% 0%; background-repeat:no-repeat;`;
+}
+
 function applySpriteFrame(el, asset, frameIdx, targetRow) {
   if (!el || !asset) return;
   const cols = Math.max(1, asset.meta?.cols || 1);
@@ -249,10 +261,20 @@ function applySpriteFrame(el, asset, frameIdx, targetRow) {
   const row = Math.min(rows - 1, targetRow);
 
   el.style.backgroundImage = `url(${asset.imageData})`;
-  el.style.backgroundSize = `${cols * 100}% ${rows * 100}%`;
   const xPct = cols > 1 ? (col / (cols - 1)) * 100 : 0;
-  const yPct = rows > 1 ? (row / (rows - 1)) * 100 : 0;
-  el.style.backgroundPosition = `${xPct}% ${yPct}%`;
+
+  if (rows > 1) {
+    // Zoom vertical scale (128%) to crop out top row header text & bottom frame numbers[cite: 5]
+    const zoom = 1.28;
+    el.style.backgroundSize = `${cols * 100}% ${rows * 128}%`;
+    const rowTop = row / rows;
+    const rowCenter = rowTop + (0.54 / rows);
+    const yPct = Math.max(0, Math.min(100, ((rowCenter - 0.5 / (rows * zoom)) / (1 - 1 / (rows * zoom))) * 100));
+    el.style.backgroundPosition = `${xPct}% ${yPct}%`;
+  } else {
+    el.style.backgroundSize = `${cols * 100}% 100%`;
+    el.style.backgroundPosition = `${xPct}% 0%`;
+  }
 }
 
 // --- 3. EXP & AUTO LEVEL-UP SYSTEM ---
@@ -533,7 +555,7 @@ function renderUnlockedCharacters() {
     const isSelected = hero.avatar.equippedChar === c.id;
     return `
       <div class="char-card rarity-${a.rarity} ${isSelected ? 'active' : ''}" onclick="equipCharacter('${c.id}')">
-        <div class="char-thumb" style="background-image:url(${a.imageData}); background-size:${a.meta.cols * 100}% ${a.meta.rows * 100}%; background-position:0% 0%;"></div>
+        <div class="char-thumb" style="${getThumbSpriteStyle(a)}"></div>
         <div style="font-size:10px; font-weight:800; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${a.name}</div>
         <div style="font-size:9px; color:var(--gold);">★${c.stars} (${RARITY_MULT[a.rarity]}x)</div>
       </div>
@@ -560,13 +582,14 @@ function openCollection() {
     grid.innerHTML = allCharAssets.map(a => {
       const unlocked = unlockedMap[a.assetId];
       const isDeployed = hero.avatar.equippedChar === a.assetId;
+      const thumbStyle = getThumbSpriteStyle(a);
 
       if (unlocked) {
         return `
           <div class="rpg-card rarity-${a.rarity}" onclick="equipCharacter('${a.assetId}'); closeCollection();"
             style="text-align:center; padding:10px 6px; cursor:pointer; position:relative; ${isDeployed ? 'box-shadow:0 0 14px rgba(245,158,11,0.65); border-color:var(--gold);' : ''}">
             ${isDeployed ? '<div style="position:absolute; top:4px; right:4px; background:var(--gold); color:#000; font-size:8px; font-weight:900; padding:1px 5px; border-radius:6px;">ACTIVE</div>' : ''}
-            <div style="width:68px; height:68px; margin:0 auto; background-image:url(${a.imageData}); background-size:${a.meta.cols * 100}% ${a.meta.rows * 100}%; background-position:0% 0%; background-repeat:no-repeat;"></div>
+            <div style="width:68px; height:68px; margin:0 auto; ${thumbStyle}"></div>
             <div style="font-size:11px; font-weight:800; margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${a.name}</div>
             <div style="font-size:9px; color:var(--gold); font-weight:700;">[${a.rarity}] ★${unlocked.stars}</div>
             <div style="font-size:9px; color:#4ade80; margin-top:2px;">${RARITY_MULT[a.rarity]}x Power</div>
@@ -576,7 +599,7 @@ function openCollection() {
         return `
           <div class="rpg-card" style="text-align:center; padding:10px 6px; opacity:0.8; border-color:#1e293b; background:#090d16; position:relative;">
             <div style="position:absolute; top:5px; right:6px; font-size:12px;">🔒</div>
-            <div style="width:68px; height:68px; margin:0 auto; background-image:url(${a.imageData}); background-size:${a.meta.cols * 100}% ${a.meta.rows * 100}%; background-position:0% 0%; background-repeat:no-repeat; filter:brightness(0);"></div>
+            <div style="width:68px; height:68px; margin:0 auto; ${thumbStyle} filter:brightness(0);"></div>
             <div style="font-size:11px; font-weight:800; margin-top:6px; color:#64748b;">???</div>
             <div style="font-size:9px; color:#475569; font-weight:700;">[${a.rarity}] LOCKED</div>
             <div style="font-size:9px; color:#334155; margin-top:2px;">Summon to Unlock</div>
