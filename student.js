@@ -2,6 +2,7 @@
   const API_URL = "https://script.google.com/macros/s/AKfycbxPN7yKyqOwyyxIarj2BTkIcuMOomlfc52zCo2vK4AcVWg8TRofqKaRR-kj1yKiLiENWA/exec";
 
   let hero = null;
+  let sessionToken = '';
   let hasUnsaved = false;
   let idleAnimFrame = 0;
   let actionAnimFrame = 0;
@@ -16,10 +17,10 @@
   let enemyMaxHP = 100;
   let idleTurn = 'hero';
 
-  const RARITY_MULT = { Common: 1.0, Rare: 1.2, Epic: 1.5, Legendary: 2.0 };
-  const RARITY_ORDER = { Legendary: 1, Epic: 2, Rare: 3, Common: 4 };
+  const RARITY_MULT = { Common: 1.0, Rare: 1.2, Epic: 1.5, Legendary: 2.0, Secret: 2.6, Divine: 3.5 };
+  const RARITY_ORDER = { Divine: 1, Secret: 2, Legendary: 3, Epic: 4, Rare: 5, Common: 6 };
 
-  // --- ANIME THEME BGM & SFX ENGINE (WEB AUDIO SYNTHESIZER) ---
+  // --- ANIME THEME BGM & SFX ENGINE ---
   let audioCtx = null;
   let bgmPlaying = false;
   let bgmStep = 0;
@@ -151,45 +152,6 @@
     meta: { cols: 1, rows: 1 }
   };
 
-  // --- INFINITE FLOOR-SCALED LOOT GENERATOR ---
-  const SLOT_CONFIGS = [
-    { slot: 'head', icon: '🪖', baseName: 'Helm', basePower: 6 },
-    { slot: 'weapon', icon: '⚔️', baseName: 'Blade', basePower: 9 },
-    { slot: 'armor', icon: '🛡️', baseName: 'Plate', basePower: 10 },
-    { slot: 'boots', icon: '👢', baseName: 'Greaves', basePower: 7 },
-    { slot: 'accessory', icon: '🔮', baseName: 'Relic', basePower: 8 }
-  ];
-
-  const RARITY_CONFIGS = {
-    Common: { scale: 1.0, bonus: 0 },
-    Rare: { scale: 1.4, bonus: 8 },
-    Epic: { scale: 1.9, bonus: 22 },
-    Legendary: { scale: 2.6, bonus: 45 }
-  };
-
-  function generateFloorLoot(floor, rarity) {
-    const f = Math.max(1, Math.floor(Number(floor) || 1));
-    const sCfg = SLOT_CONFIGS[Math.floor(Math.random() * SLOT_CONFIGS.length)];
-    const rCfg = RARITY_CONFIGS[rarity] || RARITY_CONFIGS.Common;
-
-    let prefix = 'Novice';
-    if (f >= 100) prefix = 'Godslayer';
-    else if (f >= 50) prefix = 'Celestial';
-    else if (f >= 25) prefix = 'Abyssal';
-    else if (f >= 10) prefix = 'Tempered';
-
-    const power = Math.floor((sCfg.basePower + rCfg.bonus) + (f * rCfg.scale));
-    return {
-      id: `${sCfg.slot}_${rarity}_${f}`,
-      slot: sCfg.slot,
-      icon: sCfg.icon,
-      name: `${prefix} ${sCfg.baseName} (F${f})`,
-      rarity: rarity,
-      floor: f,
-      power: power
-    };
-  }
-
   // --- 1. LOGIN ---
   async function loginStudent() {
     const studentId = document.getElementById('student-id-input').value.trim();
@@ -206,12 +168,15 @@
       if (json.status === 'error') throw new Error(json.message);
 
       hero = json.data;
+      sessionToken = json.data.token || '';
 
       if (!hero.avatar || !Array.isArray(hero.avatar.unlockedChars)) {
-        hero.avatar = { unlockedChars: [], equippedChar: null, pityEpic: 0, pityLeg: 0 };
+        hero.avatar = { unlockedChars: [], equippedChar: null, pityEpic: 0, pityLeg: 0, pitySecret: 0, pityDivine: 0 };
       }
       hero.avatar.pityEpic = Number(hero.avatar.pityEpic) || 0;
       hero.avatar.pityLeg = Number(hero.avatar.pityLeg) || 0;
+      hero.avatar.pitySecret = Number(hero.avatar.pitySecret) || 0;
+      hero.avatar.pityDivine = Number(hero.avatar.pityDivine) || 0;
 
       if (!hero.stats.level) hero.stats.level = 1;
       if (hero.stats.exp === undefined) hero.stats.exp = 0;
@@ -484,29 +449,7 @@
       hasUnsaved = true;
     }
 
-    const roll = Math.random() * 100;
-    let rarity = 'Common';
-    if (enemy.isBoss) rarity = roll < 30 ? 'Legendary' : roll < 75 ? 'Epic' : 'Rare';
-    else rarity = roll < 4 ? 'Legendary' : roll < 18 ? 'Epic' : roll < 50 ? 'Rare' : 'Common';
-
-    const drop = generateFloorLoot(clearedFloor, rarity);
-    const existingIdx = hero.inventory.findIndex(i => i.slot === drop.slot && i.rarity === drop.rarity);
-
-    if (existingIdx === -1) {
-      hero.inventory.push(drop);
-      hasUnsaved = true;
-      resBox.innerHTML = `<span style="color:#4ade80;">🎉 +${expGain} EXP! Found [${drop.rarity}] ${drop.name} (+${drop.power})!</span>`;
-    } else if (drop.power > hero.inventory[existingIdx].power) {
-      const oldEq = hero.equipped[drop.slot];
-      hero.inventory[existingIdx] = drop;
-      if (oldEq && oldEq.slot === drop.slot && oldEq.rarity === drop.rarity) {
-        hero.equipped[drop.slot] = drop;
-      }
-      hasUnsaved = true;
-      resBox.innerHTML = `<span style="color:#4ade80;">⬆️ +${expGain} EXP! Upgraded [${drop.rarity}] ${drop.name} (+${drop.power})!</span>`;
-    } else {
-      resBox.innerHTML = `<span style="color:#38bdf8;">⚔️ +${expGain} EXP! ${autoClimb ? `Advancing to Floor ${hero.towerFloor}...` : `Farming Floor ${hero.towerFloor}...`}</span>`;
-    }
+    resBox.innerHTML = `<span style="color:#38bdf8;">⚔️ +${expGain} EXP! ${autoClimb ? `Advancing to Floor ${hero.towerFloor}...` : `Farming Floor ${hero.towerFloor}...`} (Sync to claim loot!)</span>`;
 
     if (enemy.isBoss) {
       syncProgress();
@@ -546,7 +489,7 @@
     document.getElementById('pause-idle-btn').innerText = idlePaused ? '▶️ Resume Idle' : '⏸️ Pause Idle';
   }
 
-  // --- 5. SERVER-AUTHORITATIVE GACHA SYSTEM WITH PITY ---
+  // --- 5. SERVER-AUTHORITATIVE GACHA SYSTEM WITH 6 RARITIES & PITY ---
   let isRollingGacha = false;
   async function rollGacha(count) {
     if (isRollingGacha) return;
@@ -563,6 +506,7 @@
         method: 'POST',
         body: JSON.stringify({
           action: 'rollGacha',
+          token: sessionToken,
           studentId: hero.studentId,
           count: count
         })
@@ -780,7 +724,7 @@
           }
         </div>
       `;
-    }).join('') || '<p style="text-align:center; color:var(--muted); padding:20px;">No gear unlocked yet. Let your hero idle in the Tower!</p>';
+    }).join('') || '<p style="text-align:center; color:var(--muted); padding:20px;">No gear unlocked yet. Click ☁️ Sync after clearing floors to claim server loot drops!</p>';
 
     modal.classList.remove('hidden');
   }
@@ -841,8 +785,12 @@
 
     const epicEl = document.getElementById('pity-epic-text');
     const legEl = document.getElementById('pity-leg-text');
+    const secEl = document.getElementById('pity-sec-text');
+    const divEl = document.getElementById('pity-div-text');
     if (epicEl) epicEl.innerText = `${hero.avatar.pityEpic || 0}/10`;
     if (legEl) legEl.innerText = `${hero.avatar.pityLeg || 0}/25`;
+    if (secEl) secEl.innerText = `${hero.avatar.pitySecret || 0}/50`;
+    if (divEl) divEl.innerText = `${hero.avatar.pityDivine || 0}/100`;
 
     document.getElementById('roll-1-btn').disabled = hero.unspentPoints < 5;
     document.getElementById('roll-5-btn').disabled = hero.unspentPoints < 22;
@@ -867,13 +815,13 @@
         method: 'POST',
         body: JSON.stringify({
           action: 'saveStudentState',
+          token: sessionToken,
           studentId: hero.studentId,
           state: {
             avatar: { equippedChar: hero.avatar.equippedChar },
             stats: hero.stats,
             towerFloor: hero.towerFloor,
-            equipped: hero.equipped,
-            inventory: hero.inventory
+            equipped: hero.equipped
           }
         })
       });
@@ -890,6 +838,12 @@
       hasUnsaved = false;
       resetCombatRound();
       renderAll();
+
+      if (json.data.newDrops && json.data.newDrops.length > 0) {
+        const best = json.data.newDrops[json.data.newDrops.length - 1];
+        document.getElementById('raid-result').innerHTML =
+          `<span style="color:#4ade80;">🎁 Claimed [${best.rarity}] ${best.name} (+${best.power})!</span>`;
+      }
 
       showToast("✅ Synced!", "#10b981");
       setTimeout(hideToast, 1500);
