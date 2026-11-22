@@ -146,8 +146,4 @@ body { background: radial-gradient(circle at top, #172033 0%, var(--bg-dark) 80%
 .hidden { display: none !important; }
 #toast { position: fixed; top: 65px; left: 50%; transform: translateX(-50%); background: #10b981; color: #000; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 800; z-index: 200; display: none; }
 
-.arena-sprite, .sprite-frame, .char-thumb {
-  mix-blend-mode: lighten;
-  image-rendering: auto;
-  will-change: background-position;
-}
+
