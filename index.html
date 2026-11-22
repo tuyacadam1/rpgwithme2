@@ -113,10 +113,12 @@
           </div>
 
           <!-- PITY PROGRESS BAR -->
-          <div id="gacha-pity-bar" style="display:flex; justify-content:space-between; font-size:11px; background:#090d16; border:1px solid #1e293b; border-radius:8px; padding:6px 10px; margin-bottom:8px; color:#cbd5e1;">
-            <span>⚡ Epic+ Pity: <b id="pity-epic-text" style="color:#c084fc;">0/10</b></span>
-            <span>🔥 Legendary Pity: <b id="pity-leg-text" style="color:#fbbf24;">0/25</b></span>
-          </div>
+          <div id="gacha-pity-bar" style="display:grid; grid-template-columns:1fr 1fr; gap:4px 10px; font-size:11px; background:#090d16; border:1px solid #1e293b; border-radius:8px; padding:6px 10px; margin-bottom:8px; color:#cbd5e1;">
+  <span>⚡ Epic+: <b id="pity-epic-text" style="color:#c084fc;">0/10</b></span>
+  <span>🔥 Legendary: <b id="pity-leg-text" style="color:#fbbf24;">0/25</b></span>
+  <span>🩸 Secret: <b id="pity-sec-text" style="color:#fb7185;">0/50</b></span>
+  <span>💠 Divine: <b id="pity-div-text" style="color:#38bdf8;">0/100</b></span>
+</div>
 
           <div id="gacha-result-log" style="font-size:12px; text-align:center; font-weight:700; min-height:18px; margin-bottom:6px;"></div>
           
