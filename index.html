@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Idle Tower Gacha RPG</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -38,11 +38,11 @@
       </div>
     </header>
 
-    <!-- MAIN 2-COLUMN GAME GRID -->
+    <!-- MAIN RESPONSIVE GRID -->
     <main class="game-grid">
 
-      <!-- LEFT COLUMN: IDLE TOWER ARENA & GACHA -->
-      <div style="display:flex; flex-direction:column; gap:14px;">
+      <!-- COLUMN 1: IDLE TOWER ARENA & GACHA -->
+      <div class="game-col">
 
         <!-- IDLE TOWER ARENA -->
         <section id="sec-arena" class="rpg-card">
@@ -81,9 +81,9 @@
               </div>
             </div>
 
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
-              <button id="auto-climb-btn" class="btn-primary" style="background:#059669; padding:10px; font-size:12px;" onclick="toggleAutoClimb()">🔄 Auto-Climb: ON</button>
-              <button id="pause-idle-btn" class="btn-primary" style="background:#1f2937; border:1px solid #374151; padding:10px; font-size:12px;" onclick="toggleIdlePause()">⏸️ Pause Idle</button>
+            <div class="btn-pair">
+              <button id="auto-climb-btn" class="btn-primary" style="background:#059669;" onclick="toggleAutoClimb()">🔄 Auto-Climb: ON</button>
+              <button id="pause-idle-btn" class="btn-primary" style="background:#1f2937; border:1px solid #374151;" onclick="toggleIdlePause()">⏸️ Pause Idle</button>
             </div>
           </div>
 
@@ -96,20 +96,20 @@
         <section id="sec-gacha" class="rpg-card">
           <div class="card-title">
             <span>🎰 CHARACTER GACHA</span>
-            <div style="display:flex; align-items:center; gap:8px;">
+            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
               <span style="color:var(--gold); font-size:12px;">PTS: <span id="gacha-pts-display">0</span></span>
               <button class="badge" style="cursor:pointer; border-color:#a855f7; color:#e9d5ff;" onclick="openCollection()">📖 Collection (<span id="collection-count">0/0</span>)</button>
             </div>
           </div>
 
-          <div id="gacha-pity-bar" style="display:grid; grid-template-columns:1fr 1fr; gap:4px 10px; font-size:11px; background:#090d16; border:1px solid #1e293b; border-radius:8px; padding:6px 10px; margin-bottom:10px; color:#cbd5e1;">
+          <div id="gacha-pity-bar" class="pity-grid">
             <span>⚡ Epic+: <b id="pity-epic-text" style="color:#c084fc;">0/10</b></span>
             <span>🔥 Legendary: <b id="pity-leg-text" style="color:#fbbf24;">0/25</b></span>
             <span>🩸 Secret: <b id="pity-sec-text" style="color:#fb7185;">0/50</b></span>
             <span>💠 Divine: <b id="pity-div-text" style="color:#38bdf8;">0/100</b></span>
           </div>
 
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <div class="btn-pair">
             <button id="roll-1-btn" class="btn-primary btn-gacha" onclick="rollGacha(1)">✨ Summon x1 (5 Pts)</button>
             <button id="roll-5-btn" class="btn-primary" style="background:linear-gradient(90deg, #d97706, #dc2626);" onclick="rollGacha(5)">🔥 Summon x5 (22 Pts)</button>
           </div>
@@ -121,8 +121,8 @@
 
       </div>
 
-      <!-- RIGHT COLUMN: HERO GEAR, STATS & LEADERBOARD -->
-      <div style="display:flex; flex-direction:column; gap:14px;">
+      <!-- COLUMN 2: HERO GEAR, STATS & LEADERBOARD -->
+      <div class="game-col">
 
         <!-- HERO STAGE & 5 GEAR SLOTS -->
         <section id="sec-hero" class="rpg-card">
@@ -140,7 +140,7 @@
             <div class="hero-center">
               <div class="sprite-box" id="stage-hero-sprite"></div>
               <div class="pedestal"></div>
-              <div id="active-char-badge" style="margin-top:8px; font-size:12px; font-weight:800; color:var(--gold); text-align:center;">No Character</div>
+              <div id="active-char-badge" style="margin-top:8px; font-size:12px; font-weight:800; color:var(--gold); text-align:center; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">No Character</div>
             </div>
 
             <div class="slot-col">
@@ -175,7 +175,7 @@
       </div>
     </main>
 
-    <!-- BOTTOM MOBILE NAVIGATION -->
+    <!-- BOTTOM MOBILE/TABLET NAVIGATION -->
     <nav class="bottom-nav">
       <button class="nav-item active" onclick="focusSection('sec-arena', this)"><span>⚔️</span>Arena</button>
       <button class="nav-item" onclick="focusSection('sec-gacha', this)"><span>🎰</span>Gacha</button>
@@ -202,7 +202,7 @@
         <span>📖 HERO COLLECTION (<span id="modal-collection-count">0/0</span>)</span>
         <button class="plus-btn" style="background:#374151; color:#fff;" onclick="closeCollection()">✕ Close</button>
       </div>
-      <div id="collection-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(105px, 1fr)); gap:10px;"></div>
+      <div id="collection-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(95px, 1fr)); gap:8px;"></div>
     </div>
   </div>
 
