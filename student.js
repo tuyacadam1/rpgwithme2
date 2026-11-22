@@ -677,19 +677,20 @@
   // --- 7. 5-SLOT GEAR & ARMORY ---
   function renderSlots() {
     const slotDefs = [
-      { key: 'head', defIcon: '🪖', label: 'Head' },
+      { key: 'head', defIcon: '👑', label: 'Head' },
       { key: 'weapon', defIcon: '⚔️', label: 'Weapon' },
       { key: 'armor', defIcon: '🛡️', label: 'Armor' },
       { key: 'boots', defIcon: '👢', label: 'Boots' },
-      { key: 'accessory', defIcon: '💍', label: 'Relic' }
+      { key: 'accessory', defIcon: '🔮', label: 'Relic' }
     ];
 
     slotDefs.forEach(s => {
       const el = document.getElementById('slot-' + s.key);
       const item = hero.equipped[s.key];
       el.className = 'gear-slot ' + (item ? 'rarity-' + item.rarity : '');
+      const displayIcon = (item && item.icon && item.icon !== '🪖') ? item.icon : s.defIcon;
       el.innerHTML = `
-        <div class="gear-icon">${item ? item.icon : s.defIcon}</div>
+        <div class="gear-icon">${displayIcon}</div>
         <div class="gear-name">${item ? item.name : s.label}</div>
         <div class="gear-stat">${item ? `[${item.rarity}] +${item.power}` : 'Empty'}</div>
       `;
@@ -708,11 +709,12 @@
     list.innerHTML = items.map(item => {
       const curEquipped = hero.equipped[item.slot];
       const isEquipped = curEquipped && (curEquipped.id === item.id || (curEquipped.slot === item.slot && curEquipped.rarity === item.rarity));
+      const safeIcon = (item.slot === 'head' && item.icon === '🪖') ? '👑' : item.icon;
 
       return `
         <div class="rpg-card rarity-${item.rarity}" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; ${isEquipped ? 'border-color:#4ade80; background:rgba(16,185,129,0.12);' : ''}">
           <div style="display:flex; align-items:center; gap:10px;">
-            <span style="font-size:26px;">${item.icon}</span>
+            <span style="font-size:26px;">${safeIcon}</span>
             <div>
               <div style="font-weight:800; font-size:13px;">${item.name}</div>
               <div style="font-size:11px; color:var(--muted);">[${item.rarity}] ${item.slot.toUpperCase()} • +${(item.power * 10).toLocaleString()} CP</div>
@@ -763,9 +765,14 @@
     const enemy = getFloorEnemy(hero.towerFloor);
     const charObj = getEquippedCharacterObj();
     document.getElementById('tower-floor-badge').innerText = enemy.isBoss ? `🔥 FLOOR ${hero.towerFloor} BOSS` : `FLOOR ${hero.towerFloor}`;
-    document.getElementById('arena-hero-name').innerText = charObj ? charObj.name : 'No Hero Deployed';
+    const heroNameEl = document.getElementById('arena-hero-name');
+    const enemyNameEl = document.getElementById('arena-enemy-name');
+    heroNameEl.innerText = charObj ? charObj.name : 'No Hero Deployed';
+    heroNameEl.title = charObj ? charObj.name : 'No Hero Deployed';
+    enemyNameEl.innerText = enemy.asset.name;
+    enemyNameEl.title = enemy.asset.name;
+
     document.getElementById('arena-hero-cp').innerText = getTotalCP().toLocaleString() + " CP";
-    document.getElementById('arena-enemy-name').innerText = enemy.asset.name;
     document.getElementById('arena-enemy-cp').innerText = enemy.reqCP.toLocaleString() + " CP";
     updateHPBars();
   }
