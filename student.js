@@ -20,6 +20,113 @@
   const RARITY_MULT = { Common: 1.0, Rare: 1.2, Epic: 1.5, Legendary: 2.0, Secret: 2.6, Divine: 3.5 };
   const RARITY_ORDER = { Divine: 1, Secret: 2, Legendary: 3, Epic: 4, Rare: 5, Common: 6 };
 
+  // --- AUTO-BOUNDING-BOX SPRITE ANALYZER (PREVENTS HEAD CLIPPING AUTOMATICALLY) ---
+  const spriteBoundsCache = {};
+
+  function analyzeSpriteSheet(asset) {
+    if (!asset || !asset.imageData) return null;
+    const cols = Math.max(1, asset.meta?.cols || 1);
+    const rows = Math.max(1, asset.meta?.rows || 1);
+    const cacheKey = `${asset.imageData}|${cols}x${rows}`;
+
+    if (spriteBoundsCache[cacheKey]) {
+      return spriteBoundsCache[cacheKey];
+    }
+
+    const entry = { ready: false, rowMetrics: [] };
+    spriteBoundsCache[cacheKey] = entry;
+
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.onload = () => {
+      try {
+        const w = img.naturalWidth || img.width;
+        const h = img.naturalHeight || img.height;
+        if (!w || !h) return;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(img, 0, 0);
+
+        const cellW = w / cols;
+        const cellH = h / rows;
+
+        for (let r = 0; r < rows; r++) {
+          let minY = cellH;
+          let maxY = 0;
+          let foundAny = false;
+
+          const startY = Math.floor(r * cellH);
+          const endY = Math.min(h, Math.floor((r + 1) * cellH));
+          const imgData = ctx.getImageData(0, startY, w, endY - startY).data;
+          const rowHeightPx = endY - startY;
+
+          for (let y = 0; y < rowHeightPx; y++) {
+            for (let x = 0; x < w; x += 2) {
+              const alpha = imgData[(y * w + x) * 4 + 3];
+              if (alpha > 20) {
+                if (y < minY) minY = y;
+                if (y > maxY) maxY = y;
+                foundAny = true;
+              }
+            }
+          }
+
+          if (foundAny && maxY > minY) {
+            const contentHeight = maxY - minY;
+            const paddedHeight = Math.min(cellH, contentHeight * 1.18);
+            const zoom = Math.max(1.0, Math.min(1.45, cellH / paddedHeight));
+            const centerNorm = ((minY + maxY) * 0.5) / cellH;
+            entry.rowMetrics[r] = { zoom, centerNorm };
+          } else {
+            entry.rowMetrics[r] = { zoom: 1.08, centerNorm: 0.48 };
+          }
+        }
+        entry.ready = true;
+      } catch (_) {
+        // Fallback if CORS blocks pixel read on external host
+        for (let r = 0; r < rows; r++) {
+          entry.rowMetrics[r] = { zoom: 1.08, centerNorm: 0.48 };
+        }
+        entry.ready = true;
+      }
+    };
+    img.src = asset.imageData;
+    return entry;
+  }
+
+  function computeFrameBackground(asset, col, row) {
+    const cols = Math.max(1, asset.meta?.cols || 1);
+    const rows = Math.max(1, asset.meta?.rows || 1);
+    const xPct = cols > 1 ? (col / (cols - 1)) * 100 : 0;
+
+    if (rows <= 1) {
+      return {
+        size: `${cols * 100}% 100%`,
+        pos: `${xPct}% 0%`
+      };
+    }
+
+    const analysis = analyzeSpriteSheet(asset);
+    const metric = (analysis && analysis.ready && analysis.rowMetrics[row])
+      ? analysis.rowMetrics[row]
+      : { zoom: 1.08, centerNorm: 0.48 };
+
+    const zoom = metric.zoom;
+    const rowTop = row / rows;
+    const rowCenter = rowTop + (metric.centerNorm / rows);
+    const denom = 1 - (1 / (rows * zoom));
+    const rawYPct = denom > 0 ? ((rowCenter - (0.5 / (rows * zoom))) / denom) * 100 : 0;
+    const yPct = Math.max(0, Math.min(100, rawYPct));
+
+    return {
+      size: `${cols * 100}% ${rows * zoom * 100}%`,
+      pos: `${xPct}% ${yPct}%`
+    };
+  }
+
   // --- ANIME THEME BGM & SFX ENGINE ---
   let audioCtx = null;
   let bgmPlaying = false;
@@ -186,6 +293,9 @@
         hero.avatar.equippedChar = hero.avatar.unlockedChars.length > 0 ? hero.avatar.unlockedChars[0].id : null;
       }
 
+      // Pre-analyze sprite sheets so every character & monster frames itself cleanly
+      (hero.assets || []).forEach(a => analyzeSpriteSheet(a));
+
       document.getElementById('login-screen').classList.add('hidden');
       document.getElementById('game-screen').classList.remove('hidden');
 
@@ -265,15 +375,8 @@
   }
 
   function getThumbSpriteStyle(asset) {
-    const cols = Math.max(1, asset.meta?.cols || 1);
-    const rows = Math.max(1, asset.meta?.rows || 1);
-    if (rows > 1) {
-      const zoom = 1.28;
-      const rowCenter = 0.54 / rows;
-      const yPct = Math.max(0, Math.min(100, ((rowCenter - 0.5 / (rows * zoom)) / (1 - 1 / (rows * zoom))) * 100));
-      return `background-image:url(${asset.imageData}); background-size:${cols * 100}% ${rows * 128}%; background-position:0% ${yPct}%; background-repeat:no-repeat;`;
-    }
-    return `background-image:url(${asset.imageData}); background-size:${cols * 100}% 100%; background-position:0% 0%; background-repeat:no-repeat;`;
+    const bg = computeFrameBackground(asset, 0, 0);
+    return `background-image:url(${asset.imageData}); background-size:${bg.size}; background-position:${bg.pos}; background-repeat:no-repeat;`;
   }
 
   function applySpriteFrame(el, asset, frameIdx, targetRow) {
@@ -282,21 +385,11 @@
     const rows = Math.max(1, asset.meta?.rows || 1);
     const col = frameIdx % cols;
     const row = Math.min(rows - 1, targetRow);
+    const bg = computeFrameBackground(asset, col, row);
 
     el.style.backgroundImage = `url(${asset.imageData})`;
-    const xPct = cols > 1 ? (col / (cols - 1)) * 100 : 0;
-
-    if (rows > 1) {
-      const zoom = 1.28;
-      el.style.backgroundSize = `${cols * 100}% ${rows * 128}%`;
-      const rowTop = row / rows;
-      const rowCenter = rowTop + (0.54 / rows);
-      const yPct = Math.max(0, Math.min(100, ((rowCenter - 0.5 / (rows * zoom)) / (1 - 1 / (rows * zoom))) * 100));
-      el.style.backgroundPosition = `${xPct}% ${yPct}%`;
-    } else {
-      el.style.backgroundSize = `${cols * 100}% 100%`;
-      el.style.backgroundPosition = `${xPct}% 0%`;
-    }
+    el.style.backgroundSize = bg.size;
+    el.style.backgroundPosition = bg.pos;
   }
 
   // --- 3. EXP & AUTO LEVEL-UP SYSTEM ---
