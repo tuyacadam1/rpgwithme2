@@ -1,10 +1,43 @@
 (() => {
   const API_URL = "https://script.google.com/macros/s/AKfycbxPN7yKyqOwyyxIarj2BTkIcuMOomlfc52zCo2vK4AcVWg8TRofqKaRR-kj1yKiLiENWA/exec";
 
+  // --- DEVTOOLS & CONSOLE DETERRENT SHIELD ---
+  document.addEventListener('contextmenu', (e) => e.preventDefault());
+  document.addEventListener('keydown', (e) => {
+    if (
+      e.key === 'F12' ||
+      (e.ctrlKey && e.shiftKey && ['I', 'J', 'C', 'K'].includes(e.key.toUpperCase())) ||
+      (e.metaKey && e.altKey && ['I', 'J', 'C'].includes(e.key.toUpperCase())) ||
+      (e.ctrlKey && e.key.toUpperCase() === 'U')
+    ) {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    }
+  }, true);
+
+  let devToolsOpen = false;
+  setInterval(() => {
+    const widthDiff = window.outerWidth - window.innerWidth > 170;
+    const heightDiff = window.outerHeight - window.innerHeight > 170;
+    if (widthDiff || heightDiff) {
+      if (!devToolsOpen) {
+        devToolsOpen = true;
+        idlePaused = true;
+        showToast("⚠️ Close Developer Tools / Inspect Element to continue!", "#dc2626");
+      }
+    } else if (devToolsOpen) {
+      devToolsOpen = false;
+      idlePaused = false;
+      hideToast();
+    }
+  }, 1500);
+
   let hero = null;
   let sessionToken = '';
   let hasUnsaved = false;
   let isSyncing = false;
+  let queuedSync = false;
   let idleAnimFrame = 0;
   let actionAnimFrame = 0;
   let isPlayingAction = false;
@@ -296,6 +329,7 @@
       startSpriteAnimationLoop();
       startIdleCombatLoop();
       startPointsRefreshLoop();
+      startSafeAutoSyncLoop();
       renderAll();
       loadLeaderboard();
       hideToast();
@@ -407,13 +441,13 @@
     hasUnsaved = true;
     if (leveledUp) {
       playAnimeSFX('levelup');
-      showToast(`🎉 LEVEL UP! Click ☁️ Sync to save Lv. ${hero.stats.level}!`, "#f59e0b");
-      setTimeout(hideToast, 2200);
+      showToast(`🎉 LEVEL UP! Hero reached Lv. ${hero.stats.level}!`, "#f59e0b");
+      setTimeout(hideToast, 2000);
     }
     return leveledUp;
   }
 
-  // --- 4. CONTINUOUS IDLE TOWER AUTO-BATTLE (MANUAL SYNC ONLY) ---
+  // --- 4. CONTINUOUS IDLE TOWER AUTO-BATTLE ---
   function resetCombatRound() {
     const enemy = getFloorEnemy(hero.towerFloor);
     heroMaxHP = Math.max(1, getTotalCP() * 3);
@@ -445,7 +479,7 @@
 
   function startIdleCombatLoop() {
     setInterval(() => {
-      if (idlePaused || !hero || idleTurn === 'animating') return;
+      if (idlePaused || devToolsOpen || !hero || idleTurn === 'animating') return;
 
       const activeChar = getEquippedCharacterObj();
       const resBox = document.getElementById('raid-result');
@@ -535,7 +569,7 @@
       hasUnsaved = true;
     }
 
-    resBox.innerHTML = `<span style="color:#38bdf8;">⚔️ +${expGain} EXP! ${autoClimb ? `Advancing to Floor ${hero.towerFloor}...` : `Farming Floor ${hero.towerFloor}...`} (Click ☁️ Sync to save & claim loot!)</span>`;
+    resBox.innerHTML = `<span style="color:#38bdf8;">⚔️ +${expGain} EXP! ${autoClimb ? `Advancing to Floor ${hero.towerFloor}...` : `Farming Floor ${hero.towerFloor}...`}</span>`;
 
     resetCombatRound();
     renderAll();
@@ -619,6 +653,7 @@
     hasUnsaved = true;
     resetCombatRound();
     renderAll();
+    syncProgress(true); // Safe silent auto-sync on equipment change
   }
 
   function renderUnlockedCharacters() {
@@ -807,7 +842,7 @@
           }
         </div>
       `;
-    }).join('') || '<p style="text-align:center; color:var(--muted); padding:20px;">No gear unlocked yet. Click ☁️ Sync after clearing floors to claim server loot drops!</p>';
+    }).join('') || '<p style="text-align:center; color:var(--muted); padding:20px;">No gear unlocked yet. Clear floors or click ☁️ Sync to claim loot drops!</p>';
 
     modal.classList.remove('hidden');
   }
@@ -822,6 +857,7 @@
     closeArmory();
     resetCombatRound();
     renderAll();
+    syncProgress(true); // Safe silent auto-sync on gear equip
   }
 
   // --- 8. FLOOR ENEMY LOOKUP & RENDER ---
@@ -895,11 +931,25 @@
     document.getElementById(id).scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
-  // --- 9. MANUAL CLOUD SYNC (WITH OVERLAP LOCK) & LEADERBOARD ---
-  async function syncProgress() {
-    if (isSyncing || !hero) return;
+  // --- 9. SAFE CONFLICT-FREE AUTO-SYNC + MANUAL SYNC ---
+  function startSafeAutoSyncLoop() {
+    setInterval(() => {
+      if (hero && hasUnsaved && !isSyncing && !devToolsOpen) {
+        syncProgress(true);
+      }
+    }, 60000); // Auto-save idle progress & server loot once every 60 seconds
+  }
+
+  async function syncProgress(silent = false) {
+    if (!hero || devToolsOpen) return;
+    if (isSyncing) {
+      queuedSync = true;
+      return;
+    }
+
     isSyncing = true;
-    showToast("☁️ Syncing Hero...", "#10b981");
+    queuedSync = false;
+    if (!silent) showToast("☁️ Syncing Hero...", "#10b981");
 
     try {
       const res = await fetch(API_URL, {
@@ -932,16 +982,24 @@
       if (json.data.newDrops && json.data.newDrops.length > 0) {
         const best = json.data.newDrops[json.data.newDrops.length - 1];
         document.getElementById('raid-result').innerHTML =
-          `<span style="color:#4ade80;">🎁 Claimed [${best.rarity}] ${best.name} (+${best.power})!</span>`;
+          `<span style="color:#4ade80;">🎁 Loot Drop: [${best.rarity}] ${best.name} (+${best.power})!</span>`;
       }
 
-      showToast("✅ Synced!", "#10b981");
-      setTimeout(hideToast, 1500);
+      if (!silent) {
+        showToast("✅ Synced!", "#10b981");
+        setTimeout(hideToast, 1500);
+      }
     } catch (err) {
-      hideToast();
-      alert("Sync failed: " + err.message);
+      if (!silent) {
+        hideToast();
+        alert("Sync failed: " + err.message);
+      }
     } finally {
       isSyncing = false;
+      if (queuedSync) {
+        queuedSync = false;
+        setTimeout(() => syncProgress(true), 400);
+      }
     }
   }
 
