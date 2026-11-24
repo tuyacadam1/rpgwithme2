@@ -4,10 +4,11 @@
   let hero = null;
   let sessionToken = '';
   let hasUnsaved = false;
+  let isSyncing = false;
   let idleAnimFrame = 0;
   let actionAnimFrame = 0;
   let isPlayingAction = false;
-  let heroAnimRow = 0; // 0 = Idle, 1 = Attack, 2 = Ultimate
+  let heroAnimRow = 0;
 
   let idlePaused = false;
   let autoClimb = true;
@@ -20,7 +21,7 @@
   const RARITY_MULT = { Common: 1.0, Rare: 1.2, Epic: 1.5, Legendary: 2.0, Secret: 2.6, Divine: 3.5 };
   const RARITY_ORDER = { Divine: 1, Secret: 2, Legendary: 3, Epic: 4, Rare: 5, Common: 6 };
 
-  // --- AUTO-BOUNDING-BOX SPRITE ANALYZER (PREVENTS HEAD CLIPPING AUTOMATICALLY) ---
+  // --- AUTO-BOUNDING-BOX SPRITE ANALYZER ---
   const spriteBoundsCache = {};
 
   function analyzeSpriteSheet(asset) {
@@ -29,9 +30,7 @@
     const rows = Math.max(1, asset.meta?.rows || 1);
     const cacheKey = `${asset.imageData}|${cols}x${rows}`;
 
-    if (spriteBoundsCache[cacheKey]) {
-      return spriteBoundsCache[cacheKey];
-    }
+    if (spriteBoundsCache[cacheKey]) return spriteBoundsCache[cacheKey];
 
     const entry = { ready: false, rowMetrics: [] };
     spriteBoundsCache[cacheKey] = entry;
@@ -50,7 +49,6 @@
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         ctx.drawImage(img, 0, 0);
 
-        const cellW = w / cols;
         const cellH = h / rows;
 
         for (let r = 0; r < rows; r++) {
@@ -86,7 +84,6 @@
         }
         entry.ready = true;
       } catch (_) {
-        // Fallback if CORS blocks pixel read on external host
         for (let r = 0; r < rows; r++) {
           entry.rowMetrics[r] = { zoom: 1.08, centerNorm: 0.48 };
         }
@@ -103,10 +100,7 @@
     const xPct = cols > 1 ? (col / (cols - 1)) * 100 : 0;
 
     if (rows <= 1) {
-      return {
-        size: `${cols * 100}% 100%`,
-        pos: `${xPct}% 0%`
-      };
+      return { size: `${cols * 100}% 100%`, pos: `${xPct}% 0%` };
     }
 
     const analysis = analyzeSpriteSheet(asset);
@@ -259,17 +253,19 @@
     meta: { cols: 1, rows: 1 }
   };
 
-  // --- 1. LOGIN ---
+  // --- 1. LOGIN (ID + PIN) ---
   async function loginStudent() {
     const studentId = document.getElementById('student-id-input').value.trim();
+    const pin = document.getElementById('student-pin-input').value.trim();
     if (!studentId) return alert("Enter your Student ID.");
+    if (!/^\d{4,6}$/.test(pin)) return alert("Enter a 4 to 6 digit numeric PIN.");
 
     startAnimeBGM();
     showToast("Summoning World...", "#3b82f6");
     try {
       const res = await fetch(API_URL, {
         method: 'POST',
-        body: JSON.stringify({ action: 'studentLogin', studentId })
+        body: JSON.stringify({ action: 'studentLogin', studentId, pin })
       });
       const json = await res.json();
       if (json.status === 'error') throw new Error(json.message);
@@ -293,7 +289,6 @@
         hero.avatar.equippedChar = hero.avatar.unlockedChars.length > 0 ? hero.avatar.unlockedChars[0].id : null;
       }
 
-      // Pre-analyze sprite sheets so every character & monster frames itself cleanly
       (hero.assets || []).forEach(a => analyzeSpriteSheet(a));
 
       document.getElementById('login-screen').classList.add('hidden');
@@ -392,7 +387,7 @@
     el.style.backgroundPosition = bg.pos;
   }
 
-  // --- 3. EXP & AUTO LEVEL-UP SYSTEM ---
+  // --- 3. EXP & LEVEL DISPLAY ---
   function getExpNeeded(level) {
     return Math.floor(100 * Math.pow(1.25, level - 1));
   }
@@ -414,13 +409,13 @@
     hasUnsaved = true;
     if (leveledUp) {
       playAnimeSFX('levelup');
-      showToast(`🎉 LEVEL UP! Hero reached Lv. ${hero.stats.level}!`, "#f59e0b");
+      showToast(`🎉 LEVEL UP! Click ☁️ Sync to save Lv. ${hero.stats.level}!`, "#f59e0b");
       setTimeout(hideToast, 2200);
     }
     return leveledUp;
   }
 
-  // --- 4. CONTINUOUS IDLE TOWER AUTO-BATTLE ---
+  // --- 4. CONTINUOUS IDLE TOWER AUTO-BATTLE (MANUAL SYNC ONLY) ---
   function resetCombatRound() {
     const enemy = getFloorEnemy(hero.towerFloor);
     heroMaxHP = Math.max(1, getTotalCP() * 3);
@@ -542,13 +537,9 @@
       hasUnsaved = true;
     }
 
-    resBox.innerHTML = `<span style="color:#38bdf8;">⚔️ +${expGain} EXP! ${autoClimb ? `Advancing to Floor ${hero.towerFloor}...` : `Farming Floor ${hero.towerFloor}...`} (Sync to claim loot!)</span>`;
+    resBox.innerHTML = `<span style="color:#38bdf8;">⚔️ +${expGain} EXP! ${autoClimb ? `Advancing to Floor ${hero.towerFloor}...` : `Farming Floor ${hero.towerFloor}...`} (Click ☁️ Sync to save & claim loot!)</span>`;
 
-    if (enemy.isBoss) {
-      syncProgress();
-      loadLeaderboard();
-    }
-
+    // No auto-sync here — player clicks ☁️ Sync manually whenever ready
     resetCombatRound();
     renderAll();
   }
@@ -582,7 +573,7 @@
     document.getElementById('pause-idle-btn').innerText = idlePaused ? '▶️ Resume Idle' : '⏸️ Pause Idle';
   }
 
-  // --- 5. SERVER-AUTHORITATIVE GACHA SYSTEM WITH 6 RARITIES & PITY ---
+  // --- 5. SERVER-AUTHORITATIVE GACHA SYSTEM ---
   let isRollingGacha = false;
   async function rollGacha(count) {
     if (isRollingGacha) return;
@@ -719,7 +710,7 @@
     document.getElementById('collection-modal').classList.add('hidden');
   }
 
-  // --- 6. COMBAT POWER & AUTO-LEVELING STATS ---
+  // --- 6. COMBAT POWER & STATS ---
   function getTotalCP() {
     const charObj = getEquippedCharacterObj();
     if (!charObj) return 0;
@@ -907,9 +898,12 @@
     document.getElementById(id).scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
-  // --- 9. CLOUD SYNC & LEADERBOARD ---
+  // --- 9. MANUAL CLOUD SYNC (WITH OVERLAP LOCK) & LEADERBOARD ---
   async function syncProgress() {
-    showToast("☁️ Saving Hero...", "#10b981");
+    if (isSyncing || !hero) return;
+    isSyncing = true;
+    showToast("☁️ Syncing Hero...", "#10b981");
+
     try {
       const res = await fetch(API_URL, {
         method: 'POST',
@@ -919,7 +913,6 @@
           studentId: hero.studentId,
           state: {
             avatar: { equippedChar: hero.avatar.equippedChar },
-            stats: hero.stats,
             towerFloor: hero.towerFloor,
             equipped: hero.equipped
           }
@@ -950,6 +943,8 @@
     } catch (err) {
       hideToast();
       alert("Sync failed: " + err.message);
+    } finally {
+      isSyncing = false;
     }
   }
 
@@ -958,11 +953,14 @@
     if (!list || !hero) return;
 
     try {
-      if (hasUnsaved) await syncProgress();
-
       const res = await fetch(API_URL, {
         method: 'POST',
-        body: JSON.stringify({ action: 'getLeaderboard', classId: hero.classId })
+        body: JSON.stringify({
+          action: 'getLeaderboard',
+          token: sessionToken,
+          studentId: hero.studentId,
+          classId: hero.classId
+        })
       });
       const json = await res.json();
       if (json.status === 'error') throw new Error(json.message);
@@ -1003,7 +1001,11 @@
       try {
         const res = await fetch(API_URL, {
           method: 'POST',
-          body: JSON.stringify({ action: 'getStudentPoints', studentId: hero.studentId })
+          body: JSON.stringify({
+            action: 'getStudentPoints',
+            token: sessionToken,
+            studentId: hero.studentId
+          })
         });
         const json = await res.json();
         if (json.status === 'success') {
@@ -1033,6 +1035,7 @@
         method: 'POST',
         body: JSON.stringify({
           action: 'getStudentTasks',
+          token: sessionToken,
           classId: hero.classId,
           studentId: hero.studentId
         })
