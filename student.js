@@ -38,6 +38,7 @@
   let hasUnsaved = false;
   let isSyncing = false;
   let queuedSync = false;
+  let localEquipRevision = 0;
   let idleAnimFrame = 0;
   let actionAnimFrame = 0;
   let isPlayingAction = false;
@@ -650,10 +651,11 @@
 
   function equipCharacter(assetId) {
     hero.avatar.equippedChar = assetId;
+    localEquipRevision++;
     hasUnsaved = true;
     resetCombatRound();
     renderAll();
-    syncProgress(true); // Safe silent auto-sync on equipment change
+    syncProgress(true);
   }
 
   function renderUnlockedCharacters() {
@@ -853,11 +855,12 @@
     const item = hero.inventory.find(i => i.id === itemId);
     if (!item) return;
     hero.equipped[item.slot] = item;
+    localEquipRevision++;
     hasUnsaved = true;
     closeArmory();
     resetCombatRound();
     renderAll();
-    syncProgress(true); // Safe silent auto-sync on gear equip
+    syncProgress(true);
   }
 
   // --- 8. FLOOR ENEMY LOOKUP & RENDER ---
@@ -937,7 +940,7 @@
       if (hero && hasUnsaved && !isSyncing && !devToolsOpen) {
         syncProgress(true);
       }
-    }, 60000); // Auto-save idle progress & server loot once every 60 seconds
+    }, 60000);
   }
 
   async function syncProgress(silent = false) {
@@ -949,6 +952,7 @@
 
     isSyncing = true;
     queuedSync = false;
+    const syncRevision = localEquipRevision;
     if (!silent) showToast("☁️ Syncing Hero...", "#10b981");
 
     try {
@@ -969,13 +973,26 @@
       if (json.status === 'error') throw new Error(json.message);
 
       hero.unspentPoints = Number(json.data.unspentPoints) || 0;
-      if (json.data.avatar) hero.avatar = json.data.avatar;
       if (json.data.stats) hero.stats = json.data.stats;
       if (json.data.towerFloor) hero.towerFloor = json.data.towerFloor;
-      if (json.data.equipped) hero.equipped = json.data.equipped;
       if (json.data.inventory) hero.inventory = json.data.inventory;
 
-      hasUnsaved = false;
+      // Only apply server loadout if the student didn't switch hero/gear mid-sync
+      if (syncRevision === localEquipRevision) {
+        if (json.data.avatar) hero.avatar = json.data.avatar;
+        if (json.data.equipped) hero.equipped = json.data.equipped;
+        hasUnsaved = false;
+      } else {
+        if (json.data.avatar) {
+          hero.avatar.unlockedChars = json.data.avatar.unlockedChars;
+          hero.avatar.pityEpic = json.data.avatar.pityEpic;
+          hero.avatar.pityLeg = json.data.avatar.pityLeg;
+          hero.avatar.pitySecret = json.data.avatar.pitySecret;
+          hero.avatar.pityDivine = json.data.avatar.pityDivine;
+        }
+        queuedSync = true;
+      }
+
       resetCombatRound();
       renderAll();
 
@@ -998,7 +1015,7 @@
       isSyncing = false;
       if (queuedSync) {
         queuedSync = false;
-        setTimeout(() => syncProgress(true), 400);
+        setTimeout(() => syncProgress(true), 300);
       }
     }
   }
