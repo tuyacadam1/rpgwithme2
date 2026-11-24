@@ -253,19 +253,17 @@
     meta: { cols: 1, rows: 1 }
   };
 
-  // --- 1. LOGIN (ID + PIN) ---
+  // --- 1. LOGIN (STUDENT ID ONLY) ---
   async function loginStudent() {
     const studentId = document.getElementById('student-id-input').value.trim();
-    const pin = document.getElementById('student-pin-input').value.trim();
     if (!studentId) return alert("Enter your Student ID.");
-    if (!/^\d{4,6}$/.test(pin)) return alert("Enter a 4 to 6 digit numeric PIN.");
 
     startAnimeBGM();
     showToast("Summoning World...", "#3b82f6");
     try {
       const res = await fetch(API_URL, {
         method: 'POST',
-        body: JSON.stringify({ action: 'studentLogin', studentId, pin })
+        body: JSON.stringify({ action: 'studentLogin', studentId })
       });
       const json = await res.json();
       if (json.status === 'error') throw new Error(json.message);
@@ -539,7 +537,6 @@
 
     resBox.innerHTML = `<span style="color:#38bdf8;">⚔️ +${expGain} EXP! ${autoClimb ? `Advancing to Floor ${hero.towerFloor}...` : `Farming Floor ${hero.towerFloor}...`} (Click ☁️ Sync to save & claim loot!)</span>`;
 
-    // No auto-sync here — player clicks ☁️ Sync manually whenever ready
     resetCombatRound();
     renderAll();
   }
