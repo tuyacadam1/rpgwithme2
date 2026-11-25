@@ -32,6 +32,7 @@
         <span class="badge">🏰 F<span id="hud-floor">1</span></span>
         <span class="badge badge-cp">⚔️ <span id="hud-cp">0</span> CP</span>
         <span class="badge badge-gold">⭐ <span id="hud-pts">0</span> Pts</span>
+        <button class="badge" style="cursor:pointer; border-color:#f43f5e; color:#fda4af; background:rgba(244,63,94,0.12);" onclick="openPvpModal()">⚔️ 3v3 PvP</button>
         <button id="bgm-toggle-btn" class="badge" style="cursor:pointer;" onclick="toggleAnimeBGM()">🔇 BGM: OFF</button>
         <button class="badge" style="cursor:pointer; border-color:#38bdf8; color:#38bdf8;" onclick="openTasksModal()">📋 Tasks</button>
         <button class="btn-sync" onclick="syncProgress()">☁️ Sync</button>
@@ -177,6 +178,7 @@
       <button class="nav-item active" onclick="focusSection('sec-arena', this)"><span>⚔️</span>Arena</button>
       <button class="nav-item" onclick="focusSection('sec-gacha', this)"><span>🎰</span>Gacha</button>
       <button class="nav-item" onclick="focusSection('sec-hero', this)"><span>🛡️</span>Hero</button>
+      <button class="nav-item" onclick="openPvpModal()"><span>🔥</span>3v3 PvP</button>
       <button class="nav-item" onclick="focusSection('sec-rank', this)"><span>🏆</span>Rank</button>
     </nav>
   </div>
@@ -218,9 +220,117 @@
     </div>
   </div>
 
+  <!-- 3v3 TACTICAL PVP & GLOBAL LEADERBOARD MODAL -->
+  <div id="pvp-modal" class="modal hidden" onclick="if(event.target===this) closePvpModal()">
+    <div class="modal-card" style="max-width:620px; max-height:90vh; overflow-y:auto;">
+      <div class="card-title">
+        <span>⚔️ 3v3 GLOBAL PVP ARENA</span>
+        <button class="plus-btn" style="background:#374151; color:#fff;" onclick="closePvpModal()">✕ Close</button>
+      </div>
+
+      <!-- TAB BAR -->
+      <div id="pvp-tabs" style="display:flex; gap:6px; margin-bottom:12px;">
+        <button id="pvp-tab-lobby" class="btn-primary" style="flex:1; padding:8px; font-size:12px;" onclick="switchPvpTab('lobby')">🌍 Global Challengers</button>
+        <button id="pvp-tab-squad" class="btn-primary" style="flex:1; padding:8px; font-size:12px; background:#1f2937;" onclick="switchPvpTab('squad')">🛡️ My 3v3 Squad</button>
+      </div>
+
+      <!-- LOBBY & GLOBAL LEADERBOARD VIEW -->
+      <div id="pvp-view-lobby">
+        <div style="display:flex; justify-content:space-between; align-items:center; background:#090d16; border:1px solid #1e293b; border-radius:10px; padding:10px 12px; margin-bottom:10px; font-size:12px;">
+          <span>Rating: <b id="pvp-my-pts" style="color:var(--gold);">1000</b></span>
+          <span>Record: <b id="pvp-my-record" style="color:#38bdf8;">0W - 0L</b></span>
+          <button class="plus-btn" style="background:#1f2937; color:#fff; border:1px solid #374151;" onclick="loadPvpLobby()">↻ Refresh</button>
+        </div>
+        <div id="pvp-global-list"></div>
+      </div>
+
+      <!-- SQUAD BUILDER VIEW -->
+      <div id="pvp-view-squad" class="hidden">
+        <p style="font-size:12px; color:var(--muted); margin-bottom:10px;">Pick up to <b>3 Heroes</b> for your tactical 3v3 team, then click Save Squad.</p>
+        <div id="pvp-squad-slots" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-bottom:12px;"></div>
+        <button class="btn-primary" style="width:100%; margin-bottom:12px; background:#059669;" onclick="savePvpSquad()">💾 SAVE 3v3 SQUAD</button>
+        <div id="pvp-squad-roster" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(92px, 1fr)); gap:8px;"></div>
+      </div>
+
+      <!-- ACTIVE 3v3 MISCRITS-STYLE BATTLE VIEW -->
+      <div id="pvp-view-battle" class="hidden">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-size:12px; font-weight:800;">
+          <span id="pvp-b-myname" style="color:#38bdf8;">You</span>
+          <span id="pvp-b-turn" style="background:rgba(245,158,11,0.18); color:var(--gold); padding:3px 10px; border-radius:99px;">YOUR TURN</span>
+          <span id="pvp-b-oppname" style="color:#f87171;">Opponent</span>
+        </div>
+
+        <!-- TEAM BENCH DOTS -->
+        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+          <div id="pvp-my-bench" style="display:flex; gap:6px;"></div>
+          <div id="pvp-opp-bench" style="display:flex; gap:6px;"></div>
+        </div>
+
+        <!-- BATTLEFIELD -->
+        <div class="arena-box" style="margin-bottom:10px;">
+          <div class="hp-row">
+            <div class="hp-card">
+              <div class="hp-header">
+                <span id="pvp-act-myname" style="color:#f9fafb;">Hero</span>
+                <span id="pvp-act-myhp" style="color:#4ade80;">100/100</span>
+              </div>
+              <div class="hp-track"><div id="pvp-my-hpbar" class="hp-fill hp-hero" style="width:100%;"></div></div>
+              <div style="font-size:10px; color:#38bdf8; margin-top:4px; font-weight:800;">⚡ Energy: <span id="pvp-act-myen">30</span>/100 <span id="pvp-my-shield-tag"></span></div>
+            </div>
+
+            <div class="hp-card">
+              <div class="hp-header">
+                <span id="pvp-act-oppname" style="color:#f9fafb;">Enemy</span>
+                <span id="pvp-act-opphp" style="color:#f87171;">100/100</span>
+              </div>
+              <div class="hp-track"><div id="pvp-opp-hpbar" class="hp-fill hp-enemy" style="width:100%;"></div></div>
+              <div style="font-size:10px; color:#f472b6; margin-top:4px; font-weight:800;">⚡ Energy: <span id="pvp-act-oppen">30</span>/100 <span id="pvp-opp-shield-tag"></span></div>
+            </div>
+          </div>
+
+          <div class="arena-stage">
+            <div class="combatant" id="pvp-comb-my">
+              <div class="arena-sprite" id="pvp-sprite-my"></div>
+              <div class="pedestal"></div>
+            </div>
+            <div class="combatant" id="pvp-comb-opp">
+              <div class="arena-sprite" id="pvp-sprite-opp"></div>
+              <div class="pedestal"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- COMBAT LOG -->
+        <div id="pvp-battle-log" style="background:#090d16; border:1px solid #1e293b; border-radius:10px; padding:8px 10px; font-size:12px; color:#e2e8f0; min-height:38px; margin-bottom:10px; text-align:center;">
+          Choose a tactical skill below!
+        </div>
+
+        <!-- 4 INTERACTIVE SKILLS -->
+        <div id="pvp-skills-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
+          <button id="pvp-sk-0" class="btn-primary" style="padding:10px; font-size:12px; background:#1e293b; border:1px solid #334155;" onclick="usePvpSkill(0)">
+            ⚔️ Strike (+15 EN)<br><span style="font-size:10px; color:var(--muted);">1.0x ATK • Free</span>
+          </button>
+          <button id="pvp-sk-1" class="btn-primary" style="padding:10px; font-size:12px; background:#7c2d12; border:1px solid #ea580c;" onclick="usePvpSkill(1)">
+            💥 Heavy Smash (25 EN)<br><span style="font-size:10px; color:#fed7aa;">1.55x Burst Damage</span>
+          </button>
+          <button id="pvp-sk-2" class="btn-primary" style="padding:10px; font-size:12px; background:#064e3b; border:1px solid #10b981;" onclick="usePvpSkill(2)">
+            🛡️ Guard & Heal (20 EN)<br><span style="font-size:10px; color:#a7f3d0;">50% Shield + 18% Heal</span>
+          </button>
+          <button id="pvp-sk-3" class="btn-primary" style="padding:10px; font-size:12px; background:linear-gradient(90deg, #7e22ce, #be185d);" onclick="usePvpSkill(3)">
+            ⚡ Ultimate (50 EN)<br><span style="font-size:10px; color:#fbcfe8;">2.3x Signature Finisher</span>
+          </button>
+        </div>
+
+        <!-- SWITCH HERO BENCH BUTTONS -->
+        <div style="font-size:11px; color:var(--muted); font-weight:800; margin-bottom:6px;">🔄 SWITCH ACTIVE HERO (Uses Turn):</div>
+        <div id="pvp-switch-row" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px;"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- TOAST NOTIFICATION -->
   <div id="toast"></div>
 
-  <script src="student.js?v=5"></script>
+  <script src="student.js?v=6"></script>
 </body>
 </html>
