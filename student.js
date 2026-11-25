@@ -1,5 +1,5 @@
 (() => {
-  const API_URL = "https://script.google.com/macros/s/AKfycbxPN7yKyqOwyyxIarj2BTkIcuMOomlfc52zCo2vK4AcVWg8TRofqKaRR-kj1yKiLiENWA/exec";
+  const API_URL = "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL";
 
   // --- DEVTOOLS & CONSOLE DETERRENT SHIELD ---
   document.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -51,6 +51,11 @@
   let enemyHP = 100;
   let enemyMaxHP = 100;
   let idleTurn = 'hero';
+
+  // --- 3v3 PVP STATE ---
+  let pvpPlayersCache = [];
+  let draftSquadIds = [];
+  let pvpBattle = null;
 
   const RARITY_MULT = { Common: 1.0, Rare: 1.2, Epic: 1.5, Legendary: 2.0, Secret: 2.6, Divine: 3.5 };
   const RARITY_ORDER = { Divine: 1, Secret: 2, Legendary: 3, Epic: 4, Rare: 5, Common: 6 };
@@ -306,12 +311,16 @@
       sessionToken = json.data.token || '';
 
       if (!hero.avatar || !Array.isArray(hero.avatar.unlockedChars)) {
-        hero.avatar = { unlockedChars: [], equippedChar: null, pityEpic: 0, pityLeg: 0, pitySecret: 0, pityDivine: 0 };
+        hero.avatar = { unlockedChars: [], equippedChar: null, pityEpic: 0, pityLeg: 0, pitySecret: 0, pityDivine: 0, pvpSquad: [], pvpWins: 0, pvpLosses: 0, pvpPoints: 1000 };
       }
       hero.avatar.pityEpic = Number(hero.avatar.pityEpic) || 0;
       hero.avatar.pityLeg = Number(hero.avatar.pityLeg) || 0;
       hero.avatar.pitySecret = Number(hero.avatar.pitySecret) || 0;
       hero.avatar.pityDivine = Number(hero.avatar.pityDivine) || 0;
+      if (!Array.isArray(hero.avatar.pvpSquad)) hero.avatar.pvpSquad = [];
+      hero.avatar.pvpWins = Number(hero.avatar.pvpWins) || 0;
+      hero.avatar.pvpLosses = Number(hero.avatar.pvpLosses) || 0;
+      hero.avatar.pvpPoints = hero.avatar.pvpPoints !== undefined ? Number(hero.avatar.pvpPoints) : 1000;
 
       if (!hero.stats.level) hero.stats.level = 1;
       if (hero.stats.exp === undefined) hero.stats.exp = 0;
@@ -392,6 +401,18 @@
       }
 
       applySpriteFrame(document.getElementById('arena-enemy-sprite'), enemyObj, idleAnimFrame, 0);
+
+      // Animate active 3v3 PvP sprites if battle is open
+      if (pvpBattle) {
+        const myUnit = pvpBattle.myTeam[pvpBattle.myActiveIdx];
+        const oppUnit = pvpBattle.oppTeam[pvpBattle.oppActiveIdx];
+        if (myUnit && myUnit.asset && !pvpBattle.myActing) {
+          applySpriteFrame(document.getElementById('pvp-sprite-my'), myUnit.asset, idleAnimFrame, 0);
+        }
+        if (oppUnit && oppUnit.asset && !pvpBattle.oppActing) {
+          applySpriteFrame(document.getElementById('pvp-sprite-opp'), oppUnit.asset, idleAnimFrame, 0);
+        }
+      }
     }, 180);
   }
 
@@ -470,10 +491,11 @@
 
   function spawnFloatingDamage(containerId, dmg, color) {
     const box = document.getElementById(containerId);
+    if (!box) return;
     const tag = document.createElement('div');
     tag.className = 'dmg-popup';
     tag.style.color = color;
-    tag.innerText = `-${dmg.toLocaleString()}`;
+    tag.innerText = typeof dmg === 'number' ? `-${dmg.toLocaleString()}` : dmg;
     box.appendChild(tag);
     setTimeout(() => tag.remove(), 750);
   }
@@ -1138,6 +1160,530 @@
     document.getElementById('tasks-modal').classList.add('hidden');
   }
 
+  // --- 11. 3v3 MISCRITS-STYLE TACTICAL PVP & GLOBAL LEADERBOARD ---
+  function openPvpModal() {
+    if (!hero) return;
+    if (hero.avatar.unlockedChars.length === 0) {
+      return alert("Summon at least 1 Hero in the Gacha before entering 3v3 PvP!");
+    }
+    pvpBattle = null;
+    document.getElementById('pvp-modal').classList.remove('hidden');
+    switchPvpTab('lobby');
+    loadPvpLobby();
+  }
+
+  function closePvpModal() {
+    pvpBattle = null;
+    document.getElementById('pvp-modal').classList.add('hidden');
+  }
+
+  function switchPvpTab(tab) {
+    document.getElementById('pvp-tabs').classList.remove('hidden');
+    document.getElementById('pvp-view-lobby').classList.toggle('hidden', tab !== 'lobby');
+    document.getElementById('pvp-view-squad').classList.toggle('hidden', tab !== 'squad');
+    document.getElementById('pvp-view-battle').classList.add('hidden');
+
+    document.getElementById('pvp-tab-lobby').style.background = tab === 'lobby' ? '' : '#1f2937';
+    document.getElementById('pvp-tab-squad').style.background = tab === 'squad' ? '' : '#1f2937';
+
+    if (tab === 'squad') {
+      draftSquadIds = (hero.avatar.pvpSquad || []).slice(0, 3);
+      renderPvpSquadBuilder();
+    }
+  }
+
+  async function loadPvpLobby() {
+    const list = document.getElementById('pvp-global-list');
+    document.getElementById('pvp-my-pts').innerText = hero.avatar.pvpPoints || 1000;
+    document.getElementById('pvp-my-record').innerText = `${hero.avatar.pvpWins || 0}W - ${hero.avatar.pvpLosses || 0}L`;
+    list.innerHTML = '<p style="text-align:center; color:var(--muted); padding:20px;">Loading Global Challengers across all classes...</p>';
+
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'getPvpData',
+          token: sessionToken,
+          studentId: hero.studentId
+        })
+      });
+      const json = await res.json();
+      if (json.status === 'error') throw new Error(json.message);
+
+      pvpPlayersCache = json.data.leaderboard || [];
+      if (pvpPlayersCache.length === 0) {
+        list.innerHTML = '<p style="text-align:center; color:var(--muted); padding:20px;">No players with heroes found yet.</p>';
+        return;
+      }
+
+      list.innerHTML = pvpPlayersCache.map((p, idx) => {
+        const medal = idx === 0 ? '👑' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
+        const isMe = String(p.studentId) === String(hero.studentId);
+        const squadThumbs = p.squad.map(sq => {
+          const asset = (hero.assets || []).find(a => a.assetId === sq.assetId);
+          return asset ? `<div style="width:28px; height:28px; border-radius:6px; border:1px solid #334155; ${getThumbSpriteStyle(asset)}" title="${sq.name}"></div>` : '';
+        }).join('');
+
+        return `
+          <div class="rpg-card" style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; ${isMe ? 'border-color:var(--gold); background:rgba(245,158,11,0.12);' : ''}">
+            <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+              <span style="font-size:15px; font-weight:900; min-width:26px; text-align:center; color:${idx < 3 ? 'var(--gold)' : 'var(--muted)'};">${medal}</span>
+              <div style="min-width:0;">
+                <div style="font-weight:800; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                  ${p.name} <span style="font-size:10px; color:#38bdf8;">[${p.className}]</span>
+                </div>
+                <div style="font-size:10px; color:var(--muted); margin-bottom:4px;">
+                  ⭐ ${p.pvpPoints} Pts • <b style="color:#4ade80;">${p.wins}W</b>-<b style="color:#f87171;">${p.losses}L</b> • ${p.teamCP.toLocaleString()} Team CP
+                </div>
+                <div style="display:flex; gap:4px;">${squadThumbs}</div>
+              </div>
+            </div>
+            ${isMe
+              ? `<span class="badge" style="color:var(--gold);">YOU</span>`
+              : `<button class="plus-btn" style="background:linear-gradient(90deg, #e11d48, #be123c); color:#fff; padding:7px 12px;" onclick="startPvpBattle('${p.studentId}')">⚔️ Fight</button>`
+            }
+          </div>
+        `;
+      }).join('');
+    } catch (err) {
+      list.innerHTML = `<p style="text-align:center; color:#f87171; padding:20px;">Error: ${err.message}</p>`;
+    }
+  }
+
+  function renderPvpSquadBuilder() {
+    const slotsEl = document.getElementById('pvp-squad-slots');
+    const rosterEl = document.getElementById('pvp-squad-roster');
+    const allChars = (hero.assets || []).filter(a => a.type === 'character');
+
+    slotsEl.innerHTML = [0, 1, 2].map(i => {
+      const id = draftSquadIds[i];
+      const asset = allChars.find(a => a.assetId === id);
+      if (asset) {
+        return `
+          <div class="rpg-card rarity-${asset.rarity}" style="text-align:center; padding:8px; cursor:pointer;" onclick="toggleDraftSquad('${id}')">
+            <div style="width:52px; height:52px; margin:0 auto; ${getThumbSpriteStyle(asset)}"></div>
+            <div style="font-size:10px; font-weight:800; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${asset.name}</div>
+            <div style="font-size:9px; color:#f87171;">✕ Remove</div>
+          </div>
+        `;
+      }
+      return `
+        <div class="rpg-card" style="text-align:center; padding:18px 6px; border-style:dashed; border-color:#334155; color:var(--muted); font-size:11px;">
+          Slot ${i + 1}<br>(Empty)
+        </div>
+      `;
+    }).join('');
+
+    rosterEl.innerHTML = hero.avatar.unlockedChars.map(u => {
+      const asset = allChars.find(a => a.assetId === u.id);
+      if (!asset) return '';
+      const inSquad = draftSquadIds.includes(u.id);
+      return `
+        <div class="rpg-card rarity-${asset.rarity}" onclick="toggleDraftSquad('${u.id}')"
+          style="text-align:center; padding:8px 4px; cursor:pointer; ${inSquad ? 'border-color:#4ade80; box-shadow:0 0 10px rgba(74,222,128,0.4);' : ''}">
+          <div style="width:48px; height:48px; margin:0 auto; ${getThumbSpriteStyle(asset)}"></div>
+          <div style="font-size:10px; font-weight:800; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${asset.name}</div>
+          <div style="font-size:9px; color:${inSquad ? '#4ade80' : 'var(--gold)'};">${inSquad ? '✓ IN SQUAD' : `★${u.stars}`}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function toggleDraftSquad(assetId) {
+    const idx = draftSquadIds.indexOf(assetId);
+    if (idx >= 0) {
+      draftSquadIds.splice(idx, 1);
+    } else if (draftSquadIds.length < 3) {
+      draftSquadIds.push(assetId);
+    } else {
+      alert("Your 3v3 squad already has 3 heroes! Remove one first.");
+    }
+    renderPvpSquadBuilder();
+  }
+
+  async function savePvpSquad() {
+    if (draftSquadIds.length === 0) return alert("Pick at least 1 hero for your squad!");
+    showToast("💾 Saving 3v3 Squad...", "#10b981");
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'savePvpSquad',
+          token: sessionToken,
+          studentId: hero.studentId,
+          squad: draftSquadIds
+        })
+      });
+      const json = await res.json();
+      if (json.status === 'error') throw new Error(json.message);
+
+      hero.avatar.pvpSquad = json.data.pvpSquad;
+      showToast("✅ Squad Saved!", "#10b981");
+      setTimeout(hideToast, 1400);
+      switchPvpTab('lobby');
+      loadPvpLobby();
+    } catch (err) {
+      hideToast();
+      alert("Save Squad Error: " + err.message);
+    }
+  }
+
+  function buildMyPvpTeam() {
+    const allChars = (hero.assets || []).filter(a => a.type === 'character');
+    const s = hero.stats;
+    let basePower = (s.str * 15) + (s.agi * 12) + (s.vit * 12) + (s.int * 15);
+    Object.values(hero.equipped).forEach(item => {
+      if (item) basePower += (item.power * 10);
+    });
+
+    let squadIds = (hero.avatar.pvpSquad || []).filter(id => hero.avatar.unlockedChars.some(u => u.id === id));
+    if (squadIds.length === 0) {
+      squadIds = hero.avatar.unlockedChars.slice(0, 3).map(u => u.id);
+    }
+
+    return squadIds.map(id => {
+      const asset = allChars.find(a => a.assetId === id);
+      const u = hero.avatar.unlockedChars.find(x => x.id === id);
+      if (!asset || !u) return null;
+      const mult = (RARITY_MULT[asset.rarity] || 1.0) + (((Number(u.stars) || 1) - 1) * 0.1);
+      const cp = Math.max(100, Math.floor(basePower * mult));
+      return {
+        assetId: id,
+        name: asset.name,
+        rarity: asset.rarity,
+        asset,
+        cp,
+        maxHp: cp * 4,
+        hp: cp * 4,
+        energy: 30,
+        shield: false
+      };
+    }).filter(Boolean);
+  }
+
+  function startPvpBattle(opponentId) {
+    const opp = pvpPlayersCache.find(p => String(p.studentId) === String(opponentId));
+    if (!opp) return;
+
+    const myTeam = buildMyPvpTeam();
+    if (myTeam.length === 0) return alert("You need at least 1 unlocked hero!");
+
+    const allChars = (hero.assets || []).filter(a => a.type === 'character');
+    const oppTeam = opp.squad.map(sq => {
+      const asset = allChars.find(a => a.assetId === sq.assetId) || FALLBACK_MOB;
+      const cp = Math.max(100, Number(sq.cp) || 250);
+      return {
+        assetId: sq.assetId,
+        name: sq.name,
+        rarity: sq.rarity,
+        asset,
+        cp,
+        maxHp: cp * 4,
+        hp: cp * 4,
+        energy: 30,
+        shield: false
+      };
+    });
+
+    pvpBattle = {
+      opponentId: opp.studentId,
+      opponentName: opp.name,
+      myTeam,
+      oppTeam,
+      myActiveIdx: 0,
+      oppActiveIdx: 0,
+      turn: 'player',
+      myActing: false,
+      oppActing: false,
+      finished: false
+    };
+
+    document.getElementById('pvp-tabs').classList.add('hidden');
+    document.getElementById('pvp-view-lobby').classList.add('hidden');
+    document.getElementById('pvp-view-squad').classList.add('hidden');
+    document.getElementById('pvp-view-battle').classList.remove('hidden');
+
+    document.getElementById('pvp-b-myname').innerText = `${hero.name} (3v3)`;
+    document.getElementById('pvp-b-oppname').innerText = `${opp.name} [${opp.className}]`;
+    document.getElementById('pvp-battle-log').innerText = `⚔️ 3v3 Battle started vs ${opp.name}! Choose your skill!`;
+
+    renderPvpBattleUI();
+  }
+
+  function renderPvpBattleUI() {
+    if (!pvpBattle) return;
+    const myU = pvpBattle.myTeam[pvpBattle.myActiveIdx];
+    const oppU = pvpBattle.oppTeam[pvpBattle.oppActiveIdx];
+
+    document.getElementById('pvp-act-myname').innerText = myU.name;
+    document.getElementById('pvp-act-myhp').innerText = `${Math.max(0, myU.hp).toLocaleString()}/${myU.maxHp.toLocaleString()}`;
+    document.getElementById('pvp-my-hpbar').style.width = `${Math.max(0, (myU.hp / myU.maxHp) * 100)}%`;
+    document.getElementById('pvp-act-myen').innerText = myU.energy;
+    document.getElementById('pvp-my-shield-tag').innerText = myU.shield ? '🛡️ SHIELDED' : '';
+
+    document.getElementById('pvp-act-oppname').innerText = oppU.name;
+    document.getElementById('pvp-act-opphp').innerText = `${Math.max(0, oppU.hp).toLocaleString()}/${oppU.maxHp.toLocaleString()}`;
+    document.getElementById('pvp-opp-hpbar').style.width = `${Math.max(0, (oppU.hp / oppU.maxHp) * 100)}%`;
+    document.getElementById('pvp-act-oppen').innerText = oppU.energy;
+    document.getElementById('pvp-opp-shield-tag').innerText = oppU.shield ? '🛡️ SHIELDED' : '';
+
+    const turnEl = document.getElementById('pvp-b-turn');
+    turnEl.innerText = pvpBattle.turn === 'player' ? '🟢 YOUR TURN' : '🔴 ENEMY TURN';
+
+    document.getElementById('pvp-my-bench').innerHTML = pvpBattle.myTeam.map((u, idx) =>
+      `<span style="padding:2px 7px; border-radius:6px; font-size:10px; font-weight:800; background:${u.hp > 0 ? (idx === pvpBattle.myActiveIdx ? '#0284c7' : '#1e293b') : '#450a0a'}; color:${u.hp > 0 ? '#fff' : '#f87171'};">${idx + 1}. ${u.name.split(' ')[0]} ${u.hp > 0 ? '❤️' : '💀'}</span>`
+    ).join('');
+
+    document.getElementById('pvp-opp-bench').innerHTML = pvpBattle.oppTeam.map((u, idx) =>
+      `<span style="padding:2px 7px; border-radius:6px; font-size:10px; font-weight:800; background:${u.hp > 0 ? (idx === pvpBattle.oppActiveIdx ? '#be123c' : '#1e293b') : '#450a0a'}; color:${u.hp > 0 ? '#fff' : '#f87171'};">${idx + 1}. ${u.name.split(' ')[0]} ${u.hp > 0 ? '❤️' : '💀'}</span>`
+    ).join('');
+
+    const isMyTurn = pvpBattle.turn === 'player' && !pvpBattle.finished;
+    document.getElementById('pvp-sk-0').disabled = !isMyTurn;
+    document.getElementById('pvp-sk-1').disabled = !isMyTurn || myU.energy < 25;
+    document.getElementById('pvp-sk-2').disabled = !isMyTurn || myU.energy < 20;
+    document.getElementById('pvp-sk-3').disabled = !isMyTurn || myU.energy < 50;
+
+    document.getElementById('pvp-switch-row').innerHTML = pvpBattle.myTeam.map((u, idx) => {
+      const canSwitch = isMyTurn && idx !== pvpBattle.myActiveIdx && u.hp > 0;
+      return `
+        <button class="plus-btn" ${canSwitch ? '' : 'disabled'} style="padding:6px; font-size:10px; background:${idx === pvpBattle.myActiveIdx ? '#0369a1' : '#1e293b'}; color:#fff; opacity:${u.hp > 0 ? 1 : 0.4};" onclick="switchPvpHero(${idx})">
+          ${idx === pvpBattle.myActiveIdx ? '★ Active' : (u.hp > 0 ? `Swap: ${u.name.split(' ')[0]}` : `💀 ${u.name.split(' ')[0]}`)}
+        </button>
+      `;
+    }).join('');
+  }
+
+  function playPvpUnitAction(side, rowIdx, onDone) {
+    if (!pvpBattle) return;
+    const isMy = side === 'my';
+    const unit = isMy ? pvpBattle.myTeam[pvpBattle.myActiveIdx] : pvpBattle.oppTeam[pvpBattle.oppActiveIdx];
+    const spriteEl = document.getElementById(isMy ? 'pvp-sprite-my' : 'pvp-sprite-opp');
+    const cols = Math.max(1, unit.asset?.meta?.cols || 6);
+
+    if (isMy) pvpBattle.myActing = true;
+    else pvpBattle.oppActing = true;
+
+    spriteEl.classList.add(isMy ? 'lunge-right' : 'lunge-left');
+    let f = 0;
+    const t = setInterval(() => {
+      if (unit.asset) applySpriteFrame(spriteEl, unit.asset, f, rowIdx);
+      f++;
+      if (f >= cols) {
+        clearInterval(t);
+        spriteEl.classList.remove('lunge-right', 'lunge-left');
+        if (pvpBattle) {
+          if (isMy) pvpBattle.myActing = false;
+          else pvpBattle.oppActing = false;
+        }
+        if (onDone) onDone();
+      }
+    }, 115);
+  }
+
+  function switchPvpHero(newIdx) {
+    if (!pvpBattle || pvpBattle.turn !== 'player' || pvpBattle.finished) return;
+    const target = pvpBattle.myTeam[newIdx];
+    if (!target || target.hp <= 0 || newIdx === pvpBattle.myActiveIdx) return;
+
+    pvpBattle.myActiveIdx = newIdx;
+    pvpBattle.turn = 'enemy';
+    document.getElementById('pvp-battle-log').innerHTML = `🔄 You switched in <b>${target.name}</b>!`;
+    renderPvpBattleUI();
+    setTimeout(runPvpEnemyTurn, 850);
+  }
+
+  function usePvpSkill(skillIdx) {
+    if (!pvpBattle || pvpBattle.turn !== 'player' || pvpBattle.finished) return;
+    const myU = pvpBattle.myTeam[pvpBattle.myActiveIdx];
+    const oppU = pvpBattle.oppTeam[pvpBattle.oppActiveIdx];
+    const costs = [0, 25, 20, 50];
+    if (myU.energy < costs[skillIdx]) return;
+
+    pvpBattle.turn = 'animating';
+    myU.shield = false;
+    renderPvpBattleUI();
+
+    if (skillIdx === 2) {
+      myU.energy -= 20;
+      myU.shield = true;
+      const healAmt = Math.floor(myU.maxHp * 0.18);
+      myU.hp = Math.min(myU.maxHp, myU.hp + healAmt);
+      spawnFloatingDamage('pvp-comb-my', `+${healAmt} HP`, '#4ade80');
+      document.getElementById('pvp-battle-log').innerHTML = `🛡️ <b>${myU.name}</b> raised Iron Guard (50% Shield) and healed <b>+${healAmt} HP</b>!`;
+      pvpBattle.turn = 'enemy';
+      renderPvpBattleUI();
+      setTimeout(runPvpEnemyTurn, 900);
+      return;
+    }
+
+    let mult = 1.0;
+    let row = 1;
+    let label = 'Strike';
+    if (skillIdx === 0) {
+      myU.energy = Math.min(100, myU.energy + 15);
+    } else if (skillIdx === 1) {
+      myU.energy -= 25;
+      mult = 1.55;
+      row = 1;
+      label = 'Heavy Smash';
+    } else if (skillIdx === 3) {
+      myU.energy -= 50;
+      mult = 2.3;
+      row = 2;
+      label = 'ULTIMATE';
+    }
+
+    playAnimeSFX('slash');
+    playPvpUnitAction('my', row, () => {
+      if (!pvpBattle) return;
+      const oppSprite = document.getElementById('pvp-sprite-opp');
+      oppSprite.classList.add('hit-flash');
+      setTimeout(() => oppSprite.classList.remove('hit-flash'), 250);
+
+      let dmg = Math.floor(myU.cp * mult * (0.92 + Math.random() * 0.16));
+      if (oppU.shield) {
+        dmg = Math.floor(dmg * 0.5);
+        oppU.shield = false;
+      }
+      oppU.hp -= dmg;
+      spawnFloatingDamage('pvp-comb-opp', dmg, skillIdx === 3 ? '#fbbf24' : '#ffffff');
+      document.getElementById('pvp-battle-log').innerHTML = `⚔️ <b>${myU.name}</b> used <b>${label}</b> for <b>${dmg.toLocaleString()}</b> damage!`;
+
+      if (oppU.hp <= 0) {
+        oppU.hp = 0;
+        const nextOppIdx = pvpBattle.oppTeam.findIndex(u => u.hp > 0);
+        if (nextOppIdx === -1) {
+          finishPvpBattle(true);
+          return;
+        }
+        pvpBattle.oppActiveIdx = nextOppIdx;
+        document.getElementById('pvp-battle-log').innerHTML += ` 💀 ${oppU.name} fainted! <b>${pvpBattle.oppTeam[nextOppIdx].name}</b> enters!`;
+      }
+
+      pvpBattle.turn = 'enemy';
+      renderPvpBattleUI();
+      setTimeout(runPvpEnemyTurn, 900);
+    });
+  }
+
+  function runPvpEnemyTurn() {
+    if (!pvpBattle || pvpBattle.finished) return;
+    const myU = pvpBattle.myTeam[pvpBattle.myActiveIdx];
+    const oppU = pvpBattle.oppTeam[pvpBattle.oppActiveIdx];
+    oppU.shield = false;
+
+    // Tactical AI: switch if critically low and healthy bench exists
+    const healthyBenchIdx = pvpBattle.oppTeam.findIndex((u, i) => i !== pvpBattle.oppActiveIdx && u.hp > u.maxHp * 0.45);
+    if (oppU.hp < oppU.maxHp * 0.25 && healthyBenchIdx !== -1 && Math.random() < 0.5) {
+      pvpBattle.oppActiveIdx = healthyBenchIdx;
+      document.getElementById('pvp-battle-log').innerHTML = `🔄 ${pvpBattle.opponentName} switched to <b>${pvpBattle.oppTeam[healthyBenchIdx].name}</b>!`;
+      pvpBattle.turn = 'player';
+      renderPvpBattleUI();
+      return;
+    }
+
+    // Tactical AI skill selection
+    if (oppU.hp < oppU.maxHp * 0.45 && oppU.energy >= 20 && Math.random() < 0.55) {
+      oppU.energy -= 20;
+      oppU.shield = true;
+      const healAmt = Math.floor(oppU.maxHp * 0.18);
+      oppU.hp = Math.min(oppU.maxHp, oppU.hp + healAmt);
+      spawnFloatingDamage('pvp-comb-opp', `+${healAmt} HP`, '#4ade80');
+      document.getElementById('pvp-battle-log').innerHTML = `🛡️ Enemy <b>${oppU.name}</b> used Guard & healed <b>+${healAmt} HP</b>!`;
+      pvpBattle.turn = 'player';
+      renderPvpBattleUI();
+      return;
+    }
+
+    let mult = 1.0;
+    let row = 1;
+    let label = 'Strike';
+    if (oppU.energy >= 50) {
+      oppU.energy -= 50;
+      mult = 2.3;
+      row = 2;
+      label = 'ULTIMATE';
+    } else if (oppU.energy >= 25 && Math.random() < 0.65) {
+      oppU.energy -= 25;
+      mult = 1.55;
+      label = 'Heavy Smash';
+    } else {
+      oppU.energy = Math.min(100, oppU.energy + 15);
+    }
+
+    playPvpUnitAction('opp', row, () => {
+      if (!pvpBattle) return;
+      const mySprite = document.getElementById('pvp-sprite-my');
+      mySprite.classList.add('hit-flash');
+      setTimeout(() => mySprite.classList.remove('hit-flash'), 250);
+
+      let dmg = Math.floor(oppU.cp * mult * (0.92 + Math.random() * 0.16));
+      if (myU.shield) {
+        dmg = Math.floor(dmg * 0.5);
+        myU.shield = false;
+      }
+      myU.hp -= dmg;
+      spawnFloatingDamage('pvp-comb-my', dmg, '#f87171');
+      document.getElementById('pvp-battle-log').innerHTML = `🔥 Enemy <b>${oppU.name}</b> used <b>${label}</b> for <b>${dmg.toLocaleString()}</b> damage!`;
+
+      if (myU.hp <= 0) {
+        myU.hp = 0;
+        const nextMyIdx = pvpBattle.myTeam.findIndex(u => u.hp > 0);
+        if (nextMyIdx === -1) {
+          finishPvpBattle(false);
+          return;
+        }
+        pvpBattle.myActiveIdx = nextMyIdx;
+        document.getElementById('pvp-battle-log').innerHTML += ` 💀 ${myU.name} fainted! <b>${pvpBattle.myTeam[nextMyIdx].name}</b> steps up!`;
+      }
+
+      pvpBattle.turn = 'player';
+      renderPvpBattleUI();
+    });
+  }
+
+  async function finishPvpBattle(won) {
+    if (!pvpBattle || pvpBattle.finished) return;
+    pvpBattle.finished = true;
+    renderPvpBattleUI();
+
+    document.getElementById('pvp-battle-log').innerHTML = won
+      ? `<span style="color:#4ade80; font-weight:900;">🏆 VICTORY! Recording Global PvP Win...</span>`
+      : `<span style="color:#f87171; font-weight:900;">💀 DEFEAT! Recording Global PvP Match...</span>`;
+
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'recordPvpResult',
+          token: sessionToken,
+          studentId: hero.studentId,
+          opponentId: pvpBattle.opponentId,
+          won: won
+        })
+      });
+      const json = await res.json();
+      if (json.status === 'error') throw new Error(json.message);
+
+      hero.avatar.pvpWins = json.data.pvpWins;
+      hero.avatar.pvpLosses = json.data.pvpLosses;
+      hero.avatar.pvpPoints = json.data.pvpPoints;
+
+      if (json.data.won) playAnimeSFX('levelup');
+      showToast(json.data.won ? `🏆 +25 PvP Rating (${json.data.pvpPoints})!` : `⚔️ Match Recorded (${json.data.pvpPoints} Rating)`, json.data.won ? "#10b981" : "#f59e0b");
+      setTimeout(hideToast, 2200);
+    } catch (err) {
+      alert("PvP Record Error: " + err.message);
+    }
+
+    setTimeout(() => {
+      pvpBattle = null;
+      switchPvpTab('lobby');
+      loadPvpLobby();
+    }, 1600);
+  }
+
   function showToast(msg, bg) {
     const t = document.getElementById('toast');
     t.innerText = msg; t.style.background = bg; t.style.display = 'block';
@@ -1163,6 +1709,15 @@
     syncProgress,
     loadLeaderboard,
     openTasksModal,
-    closeTasksModal
+    closeTasksModal,
+    openPvpModal,
+    closePvpModal,
+    switchPvpTab,
+    loadPvpLobby,
+    toggleDraftSquad,
+    savePvpSquad,
+    startPvpBattle,
+    usePvpSkill,
+    switchPvpHero
   });
 })();
