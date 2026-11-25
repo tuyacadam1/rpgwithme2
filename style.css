@@ -1,12 +1,10 @@
 :root {
   --bg: #070b14;
   --card: #0f172a;
-  --card-alt: #131c31;
   --border: #1e293b;
   --text: #f8fafc;
   --muted: #94a3b8;
   --gold: #f59e0b;
-  --accent: #3b82f6;
 }
 
 * {
@@ -68,8 +66,7 @@ body {
 
 /* --- BUTTONS --- */
 .btn-primary {
-  width: 100%;
-  padding: 12px 14px;
+  padding: 11px 14px;
   border: none;
   border-radius: 10px;
   background: linear-gradient(90deg, #2563eb, #1d4ed8);
@@ -78,6 +75,10 @@ body {
   font-size: 13px;
   cursor: pointer;
   transition: transform 0.12s ease, opacity 0.15s ease;
+}
+
+.login-box .btn-primary {
+  width: 100%;
 }
 
 .btn-primary:active {
@@ -113,10 +114,10 @@ body {
   position: sticky;
   top: 0;
   z-index: 40;
-  background: rgba(9, 13, 22, 0.92);
+  background: rgba(9, 13, 22, 0.94);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
-  padding: 10px 14px;
+  padding: 10px 16px;
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
@@ -178,19 +179,20 @@ body {
   cursor: pointer;
 }
 
-/* --- RESPONSIVE GRID --- */
+/* --- RESPONSIVE 2-COLUMN DESKTOP / 1-COLUMN MOBILE GRID --- */
 .game-grid {
-  max-width: 1100px;
+  max-width: 1120px;
   margin: 14px auto;
-  padding: 0 12px;
+  padding: 0 14px;
   display: grid;
   grid-template-columns: 1fr;
   gap: 14px;
+  align-items: start;
 }
 
 @media (min-width: 860px) {
   .game-grid {
-    grid-template-columns: 1.08fr 0.92fr;
+    grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
   }
   .bottom-nav {
     display: none !important;
@@ -201,6 +203,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-width: 0;
 }
 
 .rpg-card {
@@ -209,12 +212,14 @@ body {
   border-radius: 16px;
   padding: 14px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  min-width: 0;
 }
 
 .card-title {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
   font-size: 13px;
   font-weight: 900;
   letter-spacing: 0.4px;
@@ -222,24 +227,21 @@ body {
   color: #f1f5f9;
 }
 
-/* --- BATTLE ARENA STAGE (WITH CUSTOM RUINS ARTWORK) --- */
+/* --- BATTLE ARENA STAGE (WITH CUSTOM RUINS BACKGROUND + FALLBACK) --- */
 .arena-box {
-  background:
-    linear-gradient(180deg, rgba(9, 13, 22, 0.55) 0%, rgba(9, 13, 22, 0.22) 45%, rgba(9, 13, 22, 0.72) 100%),
-    url('battle-bg.jpg') center 62% / cover no-repeat;
+  background-color: #090d16;
+  background-image:
+    linear-gradient(180deg, rgba(9, 13, 22, 0.52) 0%, rgba(9, 13, 22, 0.2) 45%, rgba(9, 13, 22, 0.72) 100%),
+    url('./battle-bg.jpg');
+  background-position: center 62%;
+  background-size: cover;
+  background-repeat: no-repeat;
   border: 1px solid #334155;
   border-radius: 14px;
   padding: 12px;
   position: relative;
   overflow: hidden;
   box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.65);
-}
-
-.arena-box.boss-bg {
-  background:
-    linear-gradient(180deg, rgba(127, 29, 29, 0.45) 0%, rgba(15, 23, 42, 0.32) 55%, rgba(9, 13, 22, 0.8) 100%),
-    url('battle-bg.jpg') center 62% / cover no-repeat;
-  border-color: #ef4444;
 }
 
 #pvp-view-battle .arena-box {
@@ -257,26 +259,32 @@ body {
 }
 
 .hp-card {
-  background: rgba(15, 23, 42, 0.78);
+  background: rgba(15, 23, 42, 0.8);
   backdrop-filter: blur(4px);
   border: 1px solid rgba(148, 163, 184, 0.25);
   border-radius: 10px;
   padding: 7px 9px;
+  min-width: 0;
 }
 
 .hp-header {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   font-size: 11px;
   font-weight: 800;
   margin-bottom: 5px;
-  gap: 4px;
+  gap: 6px;
 }
 
 .hp-header span:first-child {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.hp-header span:last-child {
+  flex-shrink: 0;
 }
 
 .hp-track {
@@ -301,11 +309,11 @@ body {
 }
 
 .arena-stage {
-  height: 145px;
+  height: 155px;
   display: flex;
   justify-content: space-around;
   align-items: flex-end;
-  padding-bottom: 10px;
+  padding-bottom: 12px;
   position: relative;
   z-index: 2;
 }
@@ -336,7 +344,7 @@ body {
   height: 16px;
   margin-top: -8px;
   border-radius: 50%;
-  background: radial-gradient(ellipse at center, rgba(16, 185, 129, 0.32) 0%, rgba(15, 23, 42, 0.65) 70%, transparent 100%);
+  background: radial-gradient(ellipse at center, rgba(16, 185, 129, 0.34) 0%, rgba(15, 23, 42, 0.65) 70%, transparent 100%);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6);
   z-index: 1;
 }
@@ -375,11 +383,11 @@ body {
 .pity-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 6px;
+  gap: 6px 12px;
   background: #090d16;
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 8px 10px;
+  padding: 8px 12px;
   margin-bottom: 10px;
   font-size: 11px;
 }
@@ -394,7 +402,7 @@ body {
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding-top: 10px;
+  padding: 10px 2px 4px;
   margin-top: 8px;
 }
 
