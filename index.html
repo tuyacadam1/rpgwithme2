@@ -4,11 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Idle Tower Gacha RPG</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=3" />
 </head>
 <body>
 
- <!-- LOGIN SCREEN -->
+  <!-- LOGIN SCREEN -->
   <div id="login-screen" class="login-container">
     <div class="login-box">
       <div style="font-size:48px; margin-bottom:8px;">⚔️</div>
@@ -48,7 +48,7 @@
         <section id="sec-arena" class="rpg-card">
           <div class="card-title">
             <span id="tower-floor-badge">FLOOR 1</span>
-            <span style="font-size:10px; background:rgba(16,185,129,0.15); color:#34d399; border:1px solid #059669; padding:3px 9px; border-radius:99px;">● IDLE AUTO-FIGHTING</span>
+            <span style="font-size:10px; background:rgba(16,185,129,0.15); color:#34d399; border:1px solid #059669; padding:3px 9px; border-radius:99px;">● AUTO-CLIMBING</span>
           </div>
 
           <div class="arena-box">
@@ -81,10 +81,7 @@
               </div>
             </div>
 
-            <div class="btn-pair">
-              <button id="auto-climb-btn" class="btn-primary" style="background:#059669;" onclick="toggleAutoClimb()">🔄 Auto-Climb: ON</button>
-              <button id="pause-idle-btn" class="btn-primary" style="background:#1f2937; border:1px solid #374151;" onclick="toggleIdlePause()">⏸️ Pause Idle</button>
-            </div>
+            <button id="pause-idle-btn" class="btn-primary" style="background:#1f2937; border:1px solid #374151; width:100%;" onclick="toggleIdlePause()">⏸️ Pause Idle</button>
           </div>
 
           <div id="raid-result" style="margin-top:10px; font-size:12px; text-align:center; color:#cbd5e1; min-height:18px;">
@@ -224,6 +221,6 @@
   <!-- TOAST NOTIFICATION -->
   <div id="toast"></div>
 
-  <script src="student.js"></script>
+  <script src="student.js?v=5"></script>
 </body>
 </html>
