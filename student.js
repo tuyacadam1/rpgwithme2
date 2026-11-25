@@ -39,13 +39,13 @@
   let isSyncing = false;
   let queuedSync = false;
   let localEquipRevision = 0;
+  let equipSyncDebounce = null;
   let idleAnimFrame = 0;
   let actionAnimFrame = 0;
   let isPlayingAction = false;
   let heroAnimRow = 0;
 
   let idlePaused = false;
-  let autoClimb = true;
   let heroHP = 100;
   let heroMaxHP = 100;
   let enemyHP = 100;
@@ -448,7 +448,7 @@
     return leveledUp;
   }
 
-  // --- 4. CONTINUOUS IDLE TOWER AUTO-BATTLE ---
+  // --- 4. CONTINUOUS AUTO-CLIMB TOWER BATTLE ---
   function resetCombatRound() {
     const enemy = getFloorEnemy(hero.towerFloor);
     heroMaxHP = Math.max(1, getTotalCP() * 3);
@@ -543,9 +543,6 @@
             if (hero.towerFloor > 1) {
               hero.towerFloor -= 1;
               hasUnsaved = true;
-              if (!autoClimb) {
-                document.getElementById('auto-climb-btn').innerText = `🔁 Farming Floor ${hero.towerFloor}`;
-              }
             }
             resBox.innerHTML = `<span style="color:#f87171;">⚠️ Enemy too strong! Retreated to Floor ${hero.towerFloor} to farm EXP...</span>`;
             resetCombatRound();
@@ -565,36 +562,10 @@
     const expGain = (50 + (clearedFloor * 25)) * (enemy.isBoss ? 3 : 1);
     grantTowerExp(expGain);
 
-    if (autoClimb) {
-      hero.towerFloor++;
-      hasUnsaved = true;
-    }
+    hero.towerFloor++;
+    hasUnsaved = true;
 
-    resBox.innerHTML = `<span style="color:#38bdf8;">⚔️ +${expGain} EXP! ${autoClimb ? `Advancing to Floor ${hero.towerFloor}...` : `Farming Floor ${hero.towerFloor}...`}</span>`;
-
-    resetCombatRound();
-    renderAll();
-  }
-
-  function toggleAutoClimb() {
-    autoClimb = !autoClimb;
-    const btn = document.getElementById('auto-climb-btn');
-
-    if (!autoClimb) {
-      if (hero.towerFloor > 1) {
-        hero.towerFloor -= 1;
-        hasUnsaved = true;
-      }
-      btn.innerText = `🔁 Farming Floor ${hero.towerFloor}`;
-      btn.style.background = '#d97706';
-      document.getElementById('raid-result').innerHTML =
-        `<span style="color:#fbbf24;">🔁 Stepped back to Floor ${hero.towerFloor} to farm EXP & loot!</span>`;
-    } else {
-      btn.innerText = '🔄 Auto-Climb: ON';
-      btn.style.background = '#059669';
-      document.getElementById('raid-result').innerHTML =
-        `<span style="color:#4ade80;">🔄 Auto-Climb enabled! Pushing higher floors...</span>`;
-    }
+    resBox.innerHTML = `<span style="color:#38bdf8;">⚔️ +${expGain} EXP! Advancing to Floor ${hero.towerFloor}...</span>`;
 
     resetCombatRound();
     renderAll();
@@ -649,13 +620,21 @@
     }
   }
 
+  function scheduleEquipSync() {
+    if (equipSyncDebounce) clearTimeout(equipSyncDebounce);
+    equipSyncDebounce = setTimeout(() => {
+      syncProgress(true);
+    }, 800);
+  }
+
   function equipCharacter(assetId) {
+    if (hero.avatar.equippedChar === assetId) return;
     hero.avatar.equippedChar = assetId;
     localEquipRevision++;
     hasUnsaved = true;
     resetCombatRound();
     renderAll();
-    syncProgress(true);
+    scheduleEquipSync();
   }
 
   function renderUnlockedCharacters() {
@@ -860,7 +839,7 @@
     closeArmory();
     resetCombatRound();
     renderAll();
-    syncProgress(true);
+    scheduleEquipSync();
   }
 
   // --- 8. FLOOR ENEMY LOOKUP & RENDER ---
@@ -977,7 +956,6 @@
       if (json.data.towerFloor) hero.towerFloor = json.data.towerFloor;
       if (json.data.inventory) hero.inventory = json.data.inventory;
 
-      // Only apply server loadout if the student didn't switch hero/gear mid-sync
       if (syncRevision === localEquipRevision) {
         if (json.data.avatar) hero.avatar = json.data.avatar;
         if (json.data.equipped) hero.equipped = json.data.equipped;
@@ -1173,7 +1151,6 @@
   Object.assign(window, {
     loginStudent,
     toggleAnimeBGM,
-    toggleAutoClimb,
     toggleIdlePause,
     rollGacha,
     equipCharacter,
