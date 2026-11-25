@@ -334,7 +334,10 @@ body {
   z-index: 2;
 }
 
-
+/* 3v3 PvP opponents use hero sprites drawn facing right, so mirror them left at all times */
+#pvp-sprite-opp {
+  transform: scaleX(-1);
+}
 
 .pedestal {
   width: 84px;
@@ -351,8 +354,14 @@ body {
   transform: translateX(36px) scale(1.06) !important;
 }
 
+/* Idle Tower bosses/mobs already face left by default */
 .lunge-left {
   transform: translateX(-36px) scale(1.06) !important;
+}
+
+/* Keep 3v3 PvP opponents mirrored left while lunging */
+#pvp-sprite-opp.lunge-left {
+  transform: translateX(-36px) scaleX(-1) scale(1.06) !important;
 }
 
 .hit-flash {
