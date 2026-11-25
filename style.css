@@ -334,10 +334,7 @@ body {
   z-index: 2;
 }
 
-#arena-enemy-sprite,
-#pvp-sprite-opp {
-  transform: scaleX(-1);
-}
+
 
 .pedestal {
   width: 84px;
@@ -355,7 +352,7 @@ body {
 }
 
 .lunge-left {
-  transform: translateX(-36px) scaleX(-1) scale(1.06) !important;
+  transform: translateX(-36px) scale(1.06) !important;
 }
 
 .hit-flash {
