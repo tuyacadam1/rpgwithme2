@@ -35,6 +35,8 @@
 
   let hero = null;
   let sessionToken = '';
+  let verifiedServerFloor = 1;
+  let verifiedServerLevel = 1;
   let hasUnsaved = false;
   let isSyncing = false;
   let queuedSync = false;
@@ -408,6 +410,8 @@
 
       hero = json.data;
       sessionToken = json.data.token || '';
+      verifiedServerFloor = Math.max(1, Number(hero.towerFloor) || 1);
+      verifiedServerLevel = Math.max(1, Number(hero.stats?.level) || 1);
 
       if (!hero.avatar || !Array.isArray(hero.avatar.unlockedChars)) {
         hero.avatar = { unlockedChars: [], equippedChar: null, pityEpic: 0, pityLeg: 0, pitySecret: 0, pityDivine: 0, pvpSquad: [], pvpWins: 0, pvpLosses: 0, pvpPoints: 1000, defeatedOpponents: [] };
@@ -423,12 +427,12 @@
       hero.avatar.pvpPoints = hero.avatar.pvpPoints !== undefined ? Number(hero.avatar.pvpPoints) : 1000;
 
       if (!hero.stats) hero.stats = { level: 1, exp: 0, str: 1, agi: 1, vit: 1, int: 1 };
-      hero.stats.level = Math.max(1, Number(hero.stats.level) || 1);
+      hero.stats.level = verifiedServerLevel;
       hero.stats.exp = Math.max(0, Number(hero.stats.exp) || 0);
-      hero.stats.str = Math.max(1, Number(hero.stats.str) || 1);
-      hero.stats.agi = Math.max(1, Number(hero.stats.agi) || 1);
-      hero.stats.vit = Math.max(1, Number(hero.stats.vit) || 1);
-      hero.stats.int = Math.max(1, Number(hero.stats.int) || 1);
+      hero.stats.str = verifiedServerLevel;
+      hero.stats.agi = verifiedServerLevel;
+      hero.stats.vit = verifiedServerLevel;
+      hero.stats.int = verifiedServerLevel;
 
       const validIds = new Set(hero.avatar.unlockedChars.map(u => u.id));
       if (!validIds.has(hero.avatar.equippedChar)) {
@@ -614,10 +618,10 @@
     while (hero.stats.exp >= getExpNeeded(hero.stats.level)) {
       hero.stats.exp -= getExpNeeded(hero.stats.level);
       hero.stats.level += 1;
-      hero.stats.str += 1;
-      hero.stats.agi += 1;
-      hero.stats.vit += 1;
-      hero.stats.int += 1;
+      hero.stats.str = hero.stats.level;
+      hero.stats.agi = hero.stats.level;
+      hero.stats.vit = hero.stats.level;
+      hero.stats.int = hero.stats.level;
       leveledUp = true;
     }
 
@@ -632,6 +636,7 @@
 
   // --- 4. TOWER BATTLE ---
   function resetCombatRound() {
+    enforceClientIntegrity();
     const enemy = getFloorEnemy(hero.towerFloor);
     heroMaxHP = Math.max(1, getTotalCP() * 3);
     heroHP = heroMaxHP;
@@ -665,6 +670,7 @@
     setInterval(() => {
       if (idlePaused || devToolsOpen || !hero || idleTurn === 'animating') return;
 
+      enforceClientIntegrity();
       const activeChar = getEquippedCharacterObj();
       const resBox = document.getElementById('raid-result');
 
@@ -919,6 +925,7 @@
     const charObj = getEquippedCharacterObj();
     if (!charObj) return 0;
 
+    enforceClientIntegrity();
     const s = hero.stats;
     let base = (s.str * 15) + (s.agi * 12) + (s.vit * 12) + (s.int * 15);
     Object.values(hero.equipped).forEach(item => {
@@ -933,6 +940,7 @@
   }
 
   function renderStats() {
+    enforceClientIntegrity();
     const lvl = hero.stats.level || 1;
     const exp = hero.stats.exp || 0;
     const needed = getExpNeeded(lvl);
@@ -1073,6 +1081,7 @@
   }
 
   function renderAll() {
+    enforceClientIntegrity();
     const charObj = getEquippedCharacterObj();
     document.getElementById('hud-name').innerText = hero.name;
     document.getElementById('hud-level').innerText = hero.stats.level || 1;
@@ -1106,28 +1115,51 @@
     renderArena();
   }
 
-  // --- 9. SAFE CONFLICT-FREE AUTO-SYNC + MANUAL SYNC (WITH MONOTONIC EXP GUARD) ---
-  function mergeServerStatsMonotonic(srvStats) {
-    if (!srvStats || !hero || !hero.stats) return;
-    const curLv = Math.max(1, Number(hero.stats.level) || 1);
-    const srvLv = Math.max(1, Number(srvStats.level) || 1);
-    const curExp = Math.max(0, Number(hero.stats.exp) || 0);
-    const srvExp = Math.max(0, Number(srvStats.exp) || 0);
+  // --- 9. SERVER-AUTHORITATIVE SYNC & CLIENT INTEGRITY GUARD ---
+  function enforceClientIntegrity() {
+    if (!hero || !hero.stats) return;
+    const lv = Math.max(1, Math.min(500, Math.floor(Number(hero.stats.level) || 1)));
+    const maxStatClaimed = Math.max(
+      Number(hero.stats.str) || 1,
+      Number(hero.stats.agi) || 1,
+      Number(hero.stats.vit) || 1,
+      Number(hero.stats.int) || 1
+    );
 
-    if (srvLv > curLv) {
-      hero.stats.level = srvLv;
-      hero.stats.exp = srvExp;
-    } else if (srvLv === curLv) {
-      hero.stats.level = curLv;
-      hero.stats.exp = Math.max(curExp, srvExp);
+    // If stats were manually edited in console/memory, snap back to verified server level
+    if (maxStatClaimed !== lv || lv > verifiedServerLevel + 10) {
+      hero.stats.level = verifiedServerLevel;
+      hero.stats.exp = 0;
+      hero.stats.str = verifiedServerLevel;
+      hero.stats.agi = verifiedServerLevel;
+      hero.stats.vit = verifiedServerLevel;
+      hero.stats.int = verifiedServerLevel;
     }
 
-    ['str', 'agi', 'vit', 'int'].forEach(k => {
-      hero.stats[k] = Math.max(Number(hero.stats[k]) || 1, Number(srvStats[k]) || 1);
-    });
+    const fl = Math.max(1, Math.floor(Number(hero.towerFloor) || 1));
+    if (fl > verifiedServerFloor + 15 || fl > 500) {
+      hero.towerFloor = verifiedServerFloor;
+    }
+  }
+
+  function mergeServerStatsMonotonic(srvStats) {
+    if (!srvStats || !hero || !hero.stats) return;
+    const srvLv = Math.max(1, Number(srvStats.level) || 1);
+    const srvExp = Math.max(0, Number(srvStats.exp) || 0);
+
+    // Server is strictly authoritative for level, EXP, and derived stats
+    hero.stats.level = srvLv;
+    hero.stats.exp = srvExp;
+    hero.stats.str = Math.max(1, Number(srvStats.str) || srvLv);
+    hero.stats.agi = Math.max(1, Number(srvStats.agi) || srvLv);
+    hero.stats.vit = Math.max(1, Number(srvStats.vit) || srvLv);
+    hero.stats.int = Math.max(1, Number(srvStats.int) || srvLv);
+    verifiedServerLevel = srvLv;
   }
 
   function buildSaveStatePayload() {
+    enforceClientIntegrity();
+    const lv = Math.max(1, Number(hero.stats.level) || 1);
     return JSON.stringify({
       action: 'saveStudentState',
       token: sessionToken,
@@ -1135,14 +1167,14 @@
       state: {
         avatar: { equippedChar: hero.avatar.equippedChar },
         stats: {
-          level: Math.max(1, Number(hero.stats.level) || 1),
+          level: lv,
           exp: Math.max(0, Number(hero.stats.exp) || 0),
-          str: Math.max(1, Number(hero.stats.str) || 1),
-          agi: Math.max(1, Number(hero.stats.agi) || 1),
-          vit: Math.max(1, Number(hero.stats.vit) || 1),
-          int: Math.max(1, Number(hero.stats.int) || 1)
+          str: lv,
+          agi: lv,
+          vit: lv,
+          int: lv
         },
-        towerFloor: hero.towerFloor,
+        towerFloor: Math.max(1, Math.floor(Number(hero.towerFloor) || 1)),
         equipped: hero.equipped
       }
     });
@@ -1182,7 +1214,8 @@
       hero.unspentPoints = Number(json.data.unspentPoints) || 0;
       if (json.data.stats) mergeServerStatsMonotonic(json.data.stats);
       if (json.data.towerFloor) {
-        hero.towerFloor = Math.max(Number(hero.towerFloor) || 1, Number(json.data.towerFloor) || 1);
+        verifiedServerFloor = Math.max(1, Number(json.data.towerFloor) || 1);
+        hero.towerFloor = verifiedServerFloor;
       }
       if (json.data.inventory) hero.inventory = json.data.inventory;
 
@@ -1751,6 +1784,7 @@
   }
 
   function buildMyPvpTeam() {
+    enforceClientIntegrity();
     const allChars = (hero.assets || []).filter(a => a.type === 'character');
     const s = hero.stats;
     let basePower = (s.str * 15) + (s.agi * 12) + (s.vit * 12) + (s.int * 15);
@@ -1911,7 +1945,6 @@
     const cols = Math.max(1, unit.asset?.meta?.cols || 6);
     const frameInterval = Math.max(85, Math.floor(155 / pvpSpeedMult));
 
-    // Clear any leftover interval on this side so animations never collide
     if (pvpActionTimers[side]) {
       clearInterval(pvpActionTimers[side]);
       pvpActionTimers[side] = null;
@@ -1922,7 +1955,6 @@
 
     spriteEl.classList.add(isMy ? 'lunge-right' : 'lunge-left');
 
-    // Render Frame 0 immediately so the full sprite row plays from start to finish
     let f = 0;
     if (unit.asset) applySpriteFrame(spriteEl, unit.asset, 0, rowIdx);
 
@@ -1933,7 +1965,6 @@
         pvpActionTimers[side] = null;
         spriteEl.classList.remove('lunge-right', 'lunge-left');
 
-        // Snap cleanly back to Idle Frame 0 before firing hit/damage
         if (unit.asset) applySpriteFrame(spriteEl, unit.asset, 0, 0);
 
         if (pvpBattle) {
@@ -2678,8 +2709,8 @@
       if (json.status === 'error') throw new Error(json.message);
       guildHubCache = json.data;
       editGuildPhotoDataUrl = '';
-      showToast("✅ Guild Profile Updated!", "#10b981");
-      setTimeout(hideToast, 1600);
+      showToast("✅ Guild Updated!", "#10b981");
+      setTimeout(hideToast, 1500);
       renderGuildHub();
     } catch (err) {
       hideToast();
@@ -2688,8 +2719,9 @@
   }
 
   async function leaveCurrentGuild() {
-    if (!confirm("Leave your guild? You will have a 1-hour cooldown before joining or creating another guild.")) return;
-    showToast("🚪 Leaving Guild...", "#ef4444");
+    const ok = confirm("⚠️ Leaving your guild starts a 1-HOUR cooldown before you can join or create another guild. Continue?");
+    if (!ok) return;
+    showToast("🚪 Leaving Guild...", "#dc2626");
     try {
       const res = await fetch(API_URL, {
         method: 'POST',
@@ -2708,7 +2740,7 @@
 
   async function kickGuildMember(targetStudentId) {
     if (!guildHubCache?.myGuild) return;
-    if (!confirm("Remove this member from the guild?")) return;
+    if (!confirm("Remove this member from your guild?")) return;
     try {
       const res = await fetch(API_URL, {
         method: 'POST',
@@ -2723,198 +2755,3 @@
       const json = await res.json();
       if (json.status === 'error') throw new Error(json.message);
       guildHubCache = json.data;
-      renderGuildHub();
-    } catch (err) {
-      alert(err.message);
-    }
-  }
-
-  // --- LAUNCH FULL-SCREEN 3v3 TORII ARENA FOR GUILD WAR ---
-  async function initiateGuildBattle(targetGuildId, targetMemberId) {
-    const myTeam = buildMyPvpTeam();
-    if (myTeam.length === 0) return alert("Summon at least 1 Hero in Gacha before battling!");
-
-    if (!confirm("⚔️ Enter 3v3 Guild War Battle? Winner steals 25% of the loser's Guild War Points! Leaving mid-battle counts as a LOSS.")) return;
-    showToast("⚔️ Entering Guild Battlefield...", "#dc2626");
-
-    try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'startGuildBattle',
-          token: sessionToken,
-          studentId: hero.studentId,
-          targetGuildId,
-          targetMemberId
-        })
-      });
-      const json = await res.json();
-      if (json.status === 'error') throw new Error(json.message);
-
-      hideToast();
-      const m = json.data;
-      const allChars = (hero.assets || []).filter(a => a.type === 'character');
-      const oppTeam = (m.oppTeam || []).map(sq => {
-        const asset = allChars.find(a => a.assetId === sq.assetId) || FALLBACK_MOB;
-        const cp = Math.max(100, Number(sq.cp) || 250);
-        return {
-          assetId: sq.assetId,
-          name: sq.name,
-          rarity: sq.rarity,
-          stars: Number(sq.stars) || 1,
-          asset,
-          cp,
-          maxHp: cp * 4,
-          hp: cp * 4,
-          energy: 30,
-          shield: false
-        };
-      });
-
-      clearPvpActionTimers();
-      pvpBattle = {
-        mode: 'guild',
-        matchId: m.matchId,
-        opponentId: m.defenderId,
-        opponentName: m.defenderName,
-        oppGuildName: m.oppGuild.name,
-        potentialSteal: m.potentialSteal,
-        potentialLoss: m.potentialLoss,
-        myTeam,
-        oppTeam,
-        myActiveIdx: 0,
-        oppActiveIdx: 0,
-        turn: 'player',
-        myActing: false,
-        oppActing: false,
-        finished: false
-      };
-
-      stopGuildWarTimerLoop();
-      document.getElementById('guild-modal').classList.add('hidden');
-      document.getElementById('pvp-modal').classList.remove('hidden');
-      document.getElementById('pvp-lobby-shell').classList.add('hidden');
-      document.getElementById('pvp-view-battle').classList.remove('hidden');
-
-      document.getElementById('pvp-battle-mode-tag').innerText = `🏯 GUILD WAR (+${m.potentialSteal} PTS)`;
-      document.getElementById('pvp-b-myname').innerText = `${hero.name} [${m.myGuild.name}]`;
-      document.getElementById('pvp-b-oppname').innerText = `${m.defenderName} [${m.oppGuild.name}]`;
-      document.getElementById('pvp-battle-log').innerText = `🏯 Guild War vs ${m.defenderName}! Win to steal +${m.potentialSteal} Guild Pts!`;
-
-      renderPvpBattleUI();
-    } catch (err) {
-      hideToast();
-      alert(err.message);
-    }
-  }
-
-  async function finishGuildWarBattle(won) {
-    if (!pvpBattle || pvpBattle.mode !== 'guild' || pvpBattle.finished) return;
-    pvpBattle.finished = true;
-    clearPvpActionTimers();
-    const matchId = pvpBattle.matchId;
-    renderPvpBattleUI();
-
-    document.getElementById('pvp-battle-log').innerHTML = won
-      ? `<span style="color:#4ade80; font-weight:900;">🏆 GUILD VICTORY! Stealing Guild War Points...</span>`
-      : `<span style="color:#f87171; font-weight:900;">💀 DEFEAT! Updating Guild War Standings...</span>`;
-
-    try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'finishGuildBattle',
-          token: sessionToken,
-          studentId: hero.studentId,
-          matchId,
-          won
-        })
-      });
-      const json = await res.json();
-      if (json.status === 'error') throw new Error(json.message);
-
-      guildHubCache = json.data.hub;
-      const stolen = json.data.stolenPoints || 0;
-
-      if (won) {
-        playAnimeSFX('levelup');
-        showToast(`🏆 Stole +${stolen} Guild War Points for your guild!`, "#10b981");
-      } else {
-        showToast(`💀 Lost ${stolen} Guild War Points!`, "#dc2626");
-      }
-      setTimeout(hideToast, 3000);
-    } catch (err) {
-      alert("Guild Battle Sync Error: " + err.message);
-    }
-
-    setTimeout(() => {
-      pvpBattle = null;
-      document.getElementById('pvp-modal').classList.add('hidden');
-      document.getElementById('guild-modal').classList.remove('hidden');
-      startGuildWarTimerLoop();
-      if (guildHubCache) renderGuildHub();
-      else loadGuildHub();
-    }, 1500);
-  }
-
-  function showToast(msg, bg) {
-    const t = document.getElementById('toast');
-    t.innerText = msg; t.style.background = bg; t.style.display = 'block';
-  }
-  function hideToast() { document.getElementById('toast').style.display = 'none'; }
-
-  window.addEventListener('beforeunload', (e) => {
-    flushSyncOnExit();
-    if (pvpBattle && !pvpBattle.finished) {
-      e.preventDefault();
-      e.returnValue = '';
-    }
-  });
-
-  Object.assign(window, {
-    loginStudent,
-    openDrawer,
-    closeAllDrawers,
-    toggleAnimeBGM,
-    toggleIdlePause,
-    rollGacha,
-    equipCharacter,
-    openCollection,
-    closeCollection,
-    openArmory,
-    closeArmory,
-    equipGear,
-    syncProgress,
-    toggleMainLeaderboardMode,
-    refreshActiveLeaderboard,
-    loadLeaderboard,
-    loadGlobalPvpWinsLeaderboard,
-    openTasksModal,
-    closeTasksModal,
-    openPvpModal,
-    closePvpModal,
-    handleBattleExitClick,
-    switchPvpTab,
-    loadPvpLobby,
-    toggleDraftSquad,
-    savePvpSquad,
-    startPvpBattle,
-    togglePvpSpeed,
-    usePvpSkill,
-    switchPvpHero,
-    openGuildModal,
-    closeGuildModal,
-    loadGuildHub,
-    renderGuildHub,
-    handleNewGuildPhotoSelect,
-    handleEditGuildPhotoSelect,
-    openGuildTargetPicker,
-    createNewGuild,
-    requestJoinGuild,
-    respondGuildRequest,
-    updateGuildProfile,
-    leaveCurrentGuild,
-    kickGuildMember,
-    initiateGuildBattle
-  });
-})();
