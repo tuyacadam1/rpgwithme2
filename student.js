@@ -52,12 +52,14 @@
   let enemyMaxHP = 100;
   let idleTurn = 'hero';
 
-  // --- LEADERBOARD & 3v3 PVP STATE ---
+  // --- LEADERBOARD, 3v3 PVP & GUILD STATE ---
   let mainLbMode = 'tower';
   let pvpPlayersCache = [];
   let draftSquadIds = [];
   let pvpBattle = null;
   let pvpSpeedMult = 1;
+  let guildHubCache = null;
+  let activeGuildWar = null;
 
   const RARITY_MULT = { Common: 1.0, Rare: 1.2, Epic: 1.5, Legendary: 2.0, Secret: 2.6, Divine: 3.5 };
   const RARITY_ORDER = { Divine: 1, Secret: 2, Legendary: 3, Epic: 4, Rare: 5, Common: 6 };
@@ -69,7 +71,7 @@
     return day === 0 || day === 6;
   }
 
-  // --- AUTO-BOUNDING-BOX SPRITE ANALYZER (FULL BODY + FACE CENTER) ---
+  // --- AUTO-BOUNDING-BOX SPRITE ANALYZER ---
   const spriteBoundsCache = {};
 
   function analyzeSpriteSheet(asset) {
@@ -364,7 +366,7 @@
     meta: { cols: 1, rows: 1 }
   };
 
-  // --- 1. LOGIN (STUDENT ID + PLAIN-TEXT PIN) ---
+  // --- 1. LOGIN ---
   async function loginStudent() {
     const studentId = document.getElementById('student-id-input').value.trim();
     const pin = document.getElementById('student-pin-input').value.trim();
@@ -418,15 +420,25 @@
       renderAll();
       loadLeaderboard();
 
+      if (json.data.abandonedGuildLoss) {
+        alert(`⚠️ You disconnected during an active Weekend Guild Battle against ${json.data.abandonedGuildLoss.oppGuildName}. It was counted as a LOSS (-${json.data.abandonedGuildLoss.stakePoints} Guild Pts).`);
+      }
+
       if (json.data.claimedPvpReward) {
         const rw = json.data.claimedPvpReward;
         playAnimeSFX('levelup');
         showToast(`🏆 Daily PvP Rank #${rw.rank} Reward: +${rw.points} Gacha Points!`, "#10b981");
         setTimeout(hideToast, 4200);
-      } else if (isWeekendBoostActive()) {
-        showToast("🔥 WEEKEND EVENT ACTIVE: 2x EXP & 2x LUCK!", "#f59e0b");
-        setTimeout(hideToast, 3200);
-      } else {
+      }
+
+      if (json.data.claimedGuildReward) {
+        const gr = json.data.claimedGuildReward;
+        playAnimeSFX('levelup');
+        alert(`🏯 WEEKEND GUILD WAR REWARD!\n\nGuild: ${gr.guildName}\nFinal Rank: #${gr.rank}\nReward: +${gr.points} Gacha Points added to your balance!`);
+      } else if (!json.data.claimedPvpReward && isWeekendBoostActive()) {
+        showToast("🔥 WEEKEND EVENT: 2x EXP, 2x LUCK & GUILD WARS OPEN!", "#f59e0b");
+        setTimeout(hideToast, 3400);
+      } else if (!json.data.claimedPvpReward) {
         hideToast();
       }
     } catch (err) {
@@ -588,7 +600,7 @@
     return leveledUp;
   }
 
-  // --- 4. TOWER BATTLE (ADVANCES ON WIN, RETREATS BACKWARD ON DEFEAT) ---
+  // --- 4. TOWER BATTLE ---
   function resetCombatRound() {
     const enemy = getFloorEnemy(hero.towerFloor);
     heroMaxHP = Math.max(1, getTotalCP() * 3);
@@ -802,7 +814,7 @@
     })).filter(x => x.asset);
 
     if (cards.length === 0) {
-      row.innerHTML = `<div style="font-size:12px; color:#fbbf24; padding:8px;">No characters unlocked yet. Spend 5 Class Points above to roll your first hero!</div>`;
+      row.innerHTML = `<div style="font-size:12px; color:#fbbf24; padding:8px;">No characters unlocked yet. Spend 5 Class Points in GACHA to roll your first hero!</div>`;
       return;
     }
 
@@ -1487,7 +1499,7 @@
 
         let actionBadge = '';
         if (isMe) {
-          actionBadge = `<span class="badge" style="color:var(--gold);">YOU</span>`;
+          actionBadge = `<span style="font-size:11px; font-weight:900; color:var(--gold);">YOU</span>`;
         } else if (isDefeated) {
           actionBadge = `<button class="pvp-won-btn" disabled>✓ Won Today</button>`;
         } else {
@@ -1732,7 +1744,7 @@
         const hpPct = Math.max(0, Math.min(100, (u.hp / u.maxHp) * 100));
 
         return `
-          <button class="pvp-side-card ${cardClass}" ${canSwitch ? '' : 'disabled'} onclick="switchPvpHero(${idx})" title="${isAct ? 'Currently Fighting' : (isAlive ? 'Click to swap in ' + u.name : 'Knocked Out')}">
+          <button class="pvp-side-card ${cardClass}" ${canSwitch ? '' : 'disabled'} onclick="switchPvpHero(${idx})">
             <div class="pvp-side-face" style="${faceStyle}"></div>
             <div class="pvp-side-meta">
               <span class="pvp-side-tag">${isAct ? '★ ACTIVE' : (isAlive ? 'SWAP' : '💀 KO')}</span>
@@ -1884,7 +1896,7 @@
       const healAmt = Math.floor(oppU.maxHp * 0.18);
       oppU.hp = Math.min(oppU.maxHp, oppU.hp + healAmt);
       spawnFloatingDamage('pvp-comb-opp', `+${healAmt} HP`, '#4ade80');
-      document.getElementById('pvp-battle-log').innerHTML = `🛡️ Enemy <b>${oppU.name}</b> used Guard & healed <b>+${healAmt} HP</b>!`;
+      document.getElementById('pvp-battle-log').innerHTML = `🛡️ Enemy <b>${oppU.name}</b> used Guard &amp; healed <b>+${healAmt} HP</b>!`;
       pvpBattle.turn = 'player';
       renderPvpBattleUI();
       return;
@@ -1986,6 +1998,504 @@
     }, 1600);
   }
 
+  // --- 12. GUILD SYSTEM & WEEKEND GUILD BATTLE ---
+  function getProjectedGuildPayout(rank) {
+    if (rank === 1) return 500;
+    if (rank === 2) return 400;
+    if (rank === 3) return 300;
+    if (rank === 4) return 200;
+    if (rank === 5) return 100;
+    return 50;
+  }
+
+  function openGuildModal() {
+    if (!hero) return;
+    document.getElementById('guild-modal').classList.remove('hidden');
+    loadGuildHub();
+  }
+
+  function closeGuildModal() {
+    if (activeGuildWar && !activeGuildWar.finished) {
+      const confirmForfeit = confirm("⚠️ Leaving an active Guild Battle counts as a LOSS and deducts Guild Points! Forfeit match?");
+      if (!confirmForfeit) return;
+      finalizeGuildBattle(false, true);
+      return;
+    }
+    activeGuildWar = null;
+    document.getElementById('guild-modal').classList.add('hidden');
+    closeAllDrawers();
+  }
+
+  async function loadGuildHub() {
+    const body = document.getElementById('guild-hub-body');
+    const statusEl = document.getElementById('guild-event-status');
+    const cdBanner = document.getElementById('guild-cooldown-banner');
+    body.innerHTML = '<p style="text-align:center; color:#cbd5e1; padding:20px;">Loading Guilds...</p>';
+
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'getGuildHub',
+          token: sessionToken,
+          studentId: hero.studentId
+        })
+      });
+      const json = await res.json();
+      if (json.status === 'error') throw new Error(json.message);
+
+      guildHubCache = json.data;
+
+      if (guildHubCache.unspentPoints !== undefined) {
+        hero.unspentPoints = Number(guildHubCache.unspentPoints) || 0;
+        renderAll();
+      }
+
+      if (guildHubCache.claimedGuildReward) {
+        const gr = guildHubCache.claimedGuildReward;
+        playAnimeSFX('levelup');
+        alert(`🏯 WEEKEND GUILD WAR REWARD!\n\nGuild: ${gr.guildName}\nFinal Rank: #${gr.rank}\nReward: +${gr.points} Gacha Points added to your balance!`);
+      }
+
+      statusEl.innerHTML = guildHubCache.isWeekend
+        ? `<span style="color:#4ade80; font-weight:900;">🔥 WEEKEND GUILD BATTLE ACTIVE! Attack rival guilds to steal points!</span>`
+        : `<span style="color:#fbbf24;">⏳ Guild Battles open every Saturday &amp; Sunday • Max 20 Members</span>`;
+
+      if (guildHubCache.cooldownRemainingMs > 0) {
+        const mins = Math.ceil(guildHubCache.cooldownRemainingMs / 60000);
+        cdBanner.classList.remove('hidden');
+        cdBanner.innerText = `⏳ Guild Leave Cooldown Active: You can join or create a guild in ${mins} minute(s).`;
+      } else {
+        cdBanner.classList.add('hidden');
+      }
+
+      renderGuildHub();
+    } catch (err) {
+      body.innerHTML = `<p style="text-align:center; color:#f87171; padding:20px;">Error: ${err.message}</p>`;
+    }
+  }
+
+  function renderGuildHub() {
+    if (!guildHubCache) return;
+    const body = document.getElementById('guild-hub-body');
+    const { myGuild, guilds, isWeekend, cooldownRemainingMs } = guildHubCache;
+    let html = '';
+
+    // 1. MY GUILD PANEL OR CREATE GUILD FORM
+    if (myGuild) {
+      const isOwner = String(myGuild.ownerId) === String(hero.studentId);
+      html += `
+        <div class="rpg-card" style="border-color:var(--gold); background:rgba(245,158,11,0.1); margin-bottom:14px;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+            <div>
+              <div style="font-size:16px; font-weight:900; color:#fde047;">${myGuild.emblem} ${myGuild.name}</div>
+              <div style="font-size:11px; color:#cbd5e1; margin-top:2px;">"${myGuild.motto}"</div>
+              <div style="font-size:11px; color:#38bdf8; margin-top:5px;">
+                👥 <b>${myGuild.memberCount}/${myGuild.maxMembers}</b> • 🏆 <b>${myGuild.totalPoints.toLocaleString()} Guild Pts</b> • ⚔️ ${myGuild.wins}W-${myGuild.losses}L
+              </div>
+              <div style="font-size:11px; color:#34d399; margin-top:2px;">
+                Rank #${myGuild.rank} • Projected Payout: <b>+${myGuild.projectedPayout} Gacha Pts</b> per member
+              </div>
+            </div>
+            <button onclick="leaveCurrentGuild()" style="background:#7f1d1d; color:#fecaca; border:1px solid #ef4444; border-radius:8px; padding:5px 9px; font-size:11px; font-weight:800; cursor:pointer;">
+              🚪 Leave (1h CD)
+            </button>
+          </div>
+      `;
+
+      // OWNER CONTROLS: EDIT PROFILE & APPROVE JOIN REQUESTS
+      if (isOwner) {
+        html += `
+          <div style="margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
+            <div style="font-size:11px; font-weight:900; color:#fbbf24; margin-bottom:6px;">👑 GUILD OWNER SETTINGS</div>
+            <div style="display:flex; gap:6px; margin-bottom:6px;">
+              <input id="edit-guild-emblem" value="${myGuild.emblem}" maxlength="4" style="width:46px; text-align:center; background:#0f172a; color:#fff; border:1px solid #475569; border-radius:6px; padding:5px;" title="Emblem">
+              <input id="edit-guild-name" value="${myGuild.name}" maxlength="28" placeholder="Guild Name" style="flex:1; background:#0f172a; color:#fff; border:1px solid #475569; border-radius:6px; padding:5px 8px; font-size:12px;">
+            </div>
+            <div style="display:flex; gap:6px;">
+              <input id="edit-guild-motto" value="${myGuild.motto}" maxlength="80" placeholder="Guild Motto / Profile" style="flex:1; background:#0f172a; color:#fff; border:1px solid #475569; border-radius:6px; padding:5px 8px; font-size:12px;">
+              <button onclick="updateGuildProfile()" class="plus-btn" style="font-size:11px;">💾 Save</button>
+            </div>
+          </div>
+        `;
+
+        if (myGuild.pendingDetails && myGuild.pendingDetails.length > 0) {
+          html += `
+            <div style="margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
+              <div style="font-size:11px; font-weight:900; color:#4ade80; margin-bottom:6px;">📩 JOIN REQUESTS (${myGuild.pendingDetails.length})</div>
+              ${myGuild.pendingDetails.map(p => `
+                <div style="display:flex; justify-content:space-between; align-items:center; background:#0f172a; padding:6px 8px; border-radius:8px; margin-bottom:5px; font-size:12px;">
+                  <div><b>${p.name}</b> <span style="color:#38bdf8;">[${p.className}]</span> • ${p.cp.toLocaleString()} CP</div>
+                  <div style="display:flex; gap:5px;">
+                    <button onclick="respondGuildRequest('${p.studentId}', true)" style="background:#059669; color:#fff; border:none; border-radius:6px; padding:4px 8px; font-weight:800; cursor:pointer;">✓ Approve</button>
+                    <button onclick="respondGuildRequest('${p.studentId}', false)" style="background:#991b1b; color:#fff; border:none; border-radius:6px; padding:4px 8px; font-weight:800; cursor:pointer;">✕</button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `;
+        }
+      }
+
+      // MEMBER ROSTER & INDIVIDUAL CONTRIBUTIONS
+      html += `
+        <div style="margin-top:10px; padding-top:10px; border-top:1px solid #334155;">
+          <div style="font-size:11px; font-weight:900; color:#94a3b8; margin-bottom:6px;">👥 MEMBERS &amp; POINT CONTRIBUTION</div>
+          <div style="max-height:150px; overflow-y:auto;">
+            ${myGuild.memberDetails.map(m => `
+              <div style="display:flex; justify-content:space-between; align-items:center; padding:5px 6px; border-bottom:1px solid #1e293b; font-size:11px;">
+                <div>
+                  ${m.isOwner ? '👑' : '⚔️'} <b>${m.name}</b> <span style="color:#64748b;">[${m.className}]</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span style="color:#fbbf24; font-weight:800;">+${m.contribution.toLocaleString()} Pts</span>
+                  ${(isOwner && !m.isOwner) ? `<button onclick="kickGuildMember('${m.studentId}')" style="background:transparent; color:#f87171; border:none; cursor:pointer; font-weight:900;" title="Kick Member">✕</button>` : ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>`;
+    } else if (cooldownRemainingMs <= 0) {
+      html += `
+        <div class="rpg-card" style="margin-bottom:14px; border-color:#3b82f6;">
+          <div style="font-size:13px; font-weight:900; color:#60a5fa; margin-bottom:8px;">✨ CREATE A NEW GUILD (Max 20 Members)</div>
+          <div style="display:flex; gap:6px; margin-bottom:6px;">
+            <input id="new-guild-emblem" value="🐉" maxlength="4" style="width:46px; text-align:center; background:#0f172a; color:#fff; border:1px solid #475569; border-radius:6px; padding:6px;">
+            <input id="new-guild-name" maxlength="28" placeholder="Enter Guild Name..." style="flex:1; background:#0f172a; color:#fff; border:1px solid #475569; border-radius:6px; padding:6px 10px; font-size:12px;">
+          </div>
+          <div style="display:flex; gap:6px;">
+            <input id="new-guild-motto" maxlength="80" placeholder="Guild Motto / Description..." style="flex:1; background:#0f172a; color:#fff; border:1px solid #475569; border-radius:6px; padding:6px 10px; font-size:12px;">
+            <button onclick="createNewGuild()" class="plus-btn">➕ Create</button>
+          </div>
+        </div>
+      `;
+    }
+
+    // 2. WEEKEND GUILD REWARDS BANNER (CONVERTIBLE GACHA POINTS)
+    html += `
+      <div class="rpg-card" style="margin-bottom:10px; padding:8px 10px; background:rgba(16,185,129,0.1); border-color:#10b981;">
+        <div style="font-size:11px; font-weight:900; color:#34d399; margin-bottom:4px;">💎 WEEKEND GUILD REWARDS (Convertible Gacha Points / Member)</div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px; font-size:10px; color:#e2e8f0;">
+          <span style="background:#0f172a; padding:2px 6px; border-radius:6px; border:1px solid #fbbf24;">🥇 1st: <b>+500 Pts</b></span>
+          <span style="background:#0f172a; padding:2px 6px; border-radius:6px;">🥈 2nd: <b>+400 Pts</b></span>
+          <span style="background:#0f172a; padding:2px 6px; border-radius:6px;">🥉 3rd: <b>+300 Pts</b></span>
+          <span style="background:#0f172a; padding:2px 6px; border-radius:6px;">4th: <b>+200 Pts</b></span>
+          <span style="background:#0f172a; padding:2px 6px; border-radius:6px;">5th: <b>+100 Pts</b></span>
+          <span style="background:#0f172a; padding:2px 6px; border-radius:6px;">6th+: <b>+50 Pts</b></span>
+        </div>
+      </div>
+    `;
+
+    // 3. GLOBAL GUILD RANKINGS & WEEKEND BATTLE TARGETS
+    html += `<div style="font-size:12px; font-weight:900; color:#fbbf24; margin-bottom:8px;">🏆 GUILD RANKINGS &amp; WEEKEND WAR</div>`;
+    if (guilds.length === 0) {
+      html += `<p style="text-align:center; color:#94a3b8; font-size:12px; padding:14px;">No guilds formed yet. Create the first guild above!</p>`;
+    } else {
+      html += guilds.map((g, idx) => {
+        const rank = idx + 1;
+        const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
+        const projectedPts = g.projectedPayout || getProjectedGuildPayout(rank);
+        const isMyGuild = myGuild && g.guildId === myGuild.guildId;
+        let btnHtml = '';
+
+        if (isMyGuild) {
+          btnHtml = `<span style="font-size:11px; font-weight:900; color:var(--gold);">YOUR GUILD</span>`;
+        } else if (myGuild) {
+          btnHtml = isWeekend
+            ? `<button onclick="initiateGuildBattle('${g.guildId}')" style="background:linear-gradient(135deg,#dc2626,#991b1b); color:#fff; border:1px solid #f87171; border-radius:8px; padding:6px 10px; font-size:11px; font-weight:900; cursor:pointer;">⚔️ WAR</button>`
+            : `<span style="font-size:10px; color:#64748b;">Weekend Only</span>`;
+        } else if (g.hasRequested) {
+          btnHtml = `<span style="font-size:11px; color:#fbbf24; font-weight:800;">⏳ Pending</span>`;
+        } else if (g.memberCount >= g.maxMembers) {
+          btnHtml = `<span style="font-size:11px; color:#f87171;">Full (20/20)</span>`;
+        } else if (cooldownRemainingMs <= 0) {
+          btnHtml = `<button onclick="requestJoinGuild('${g.guildId}')" class="plus-btn" style="font-size:11px;">📩 Request Join</button>`;
+        }
+
+        return `
+          <div class="rpg-card" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; ${isMyGuild ? 'border-color:var(--gold);' : ''}">
+            <div style="min-width:0;">
+              <div style="font-weight:900; font-size:13px;">${medal} ${g.emblem} ${g.name} <span style="font-size:11px; color:#38bdf8;">(${g.memberCount}/${g.maxMembers})</span></div>
+              <div style="font-size:10px; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">"${g.motto}"</div>
+              <div style="font-size:11px; color:#fde047; margin-top:3px;">
+                🏆 <b>${g.totalPoints.toLocaleString()} Pts</b> • <span style="color:#4ade80;">${g.wins}W</span>-<span style="color:#f87171;">${g.losses}L</span> • <span style="color:#34d399;">💎 +${projectedPts} Gacha Pts</span>
+              </div>
+            </div>
+            <div style="flex-shrink:0; margin-left:8px;">${btnHtml}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    body.innerHTML = html;
+  }
+
+  async function createNewGuild() {
+    const name = document.getElementById('new-guild-name').value.trim();
+    const emblem = document.getElementById('new-guild-emblem').value.trim();
+    const motto = document.getElementById('new-guild-motto').value.trim();
+    if (!name) return alert("Enter a Guild Name.");
+
+    showToast("🏯 Founding Guild...", "#f59e0b");
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'createGuild', token: sessionToken, studentId: hero.studentId, name, emblem, motto })
+      });
+      const json = await res.json();
+      if (json.status === 'error') throw new Error(json.message);
+      guildHubCache = json.data;
+      hideToast();
+      renderGuildHub();
+    } catch (err) {
+      hideToast();
+      alert(err.message);
+    }
+  }
+
+  async function requestJoinGuild(guildId) {
+    showToast("📩 Sending Join Request...", "#3b82f6");
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'requestJoinGuild', token: sessionToken, studentId: hero.studentId, guildId })
+      });
+      const json = await res.json();
+      if (json.status === 'error') throw new Error(json.message);
+      guildHubCache = json.data;
+      showToast("✅ Request Sent! Awaiting Owner Approval.", "#10b981");
+      setTimeout(hideToast, 2200);
+      renderGuildHub();
+    } catch (err) {
+      hideToast();
+      alert(err.message);
+    }
+  }
+
+  async function respondGuildRequest(targetStudentId, approve) {
+    if (!guildHubCache?.myGuild) return;
+    showToast(approve ? "✅ Approving Member..." : "Declining...", "#10b981");
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'respondGuildRequest',
+          token: sessionToken,
+          studentId: hero.studentId,
+          guildId: guildHubCache.myGuild.guildId,
+          targetStudentId,
+          approve
+        })
+      });
+      const json = await res.json();
+      if (json.status === 'error') throw new Error(json.message);
+      guildHubCache = json.data;
+      hideToast();
+      renderGuildHub();
+    } catch (err) {
+      hideToast();
+      alert(err.message);
+    }
+  }
+
+  async function updateGuildProfile() {
+    if (!guildHubCache?.myGuild) return;
+    const name = document.getElementById('edit-guild-name').value.trim();
+    const emblem = document.getElementById('edit-guild-emblem').value.trim();
+    const motto = document.getElementById('edit-guild-motto').value.trim();
+    showToast("💾 Updating Guild Profile...", "#10b981");
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'updateGuildProfile',
+          token: sessionToken,
+          studentId: hero.studentId,
+          guildId: guildHubCache.myGuild.guildId,
+          name, emblem, motto
+        })
+      });
+      const json = await res.json();
+      if (json.status === 'error') throw new Error(json.message);
+      guildHubCache = json.data;
+      showToast("✅ Guild Profile Updated!", "#10b981");
+      setTimeout(hideToast, 1600);
+      renderGuildHub();
+    } catch (err) {
+      hideToast();
+      alert(err.message);
+    }
+  }
+
+  async function leaveCurrentGuild() {
+    if (!confirm("Leave your guild? You will have a 1-hour cooldown before joining or creating another guild.")) return;
+    showToast("🚪 Leaving Guild...", "#ef4444");
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'leaveGuild', token: sessionToken, studentId: hero.studentId })
+      });
+      const json = await res.json();
+      if (json.status === 'error') throw new Error(json.message);
+      guildHubCache = json.data;
+      hideToast();
+      loadGuildHub();
+    } catch (err) {
+      hideToast();
+      alert(err.message);
+    }
+  }
+
+  async function kickGuildMember(targetStudentId) {
+    if (!guildHubCache?.myGuild) return;
+    if (!confirm("Remove this member from the guild?")) return;
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'kickGuildMember',
+          token: sessionToken,
+          studentId: hero.studentId,
+          guildId: guildHubCache.myGuild.guildId,
+          targetStudentId
+        })
+      });
+      const json = await res.json();
+      if (json.status === 'error') throw new Error(json.message);
+      guildHubCache = json.data;
+      renderGuildHub();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  // --- WEEKEND GUILD BATTLE EXECUTION (AUTO-FORFEIT IF LEFT MID-FIGHT) ---
+  async function initiateGuildBattle(targetGuildId) {
+    if (!confirm("⚔️ Start Weekend Guild Battle? Warning: Leaving or closing during the battle counts as a LOSS and deducts Guild Points!")) return;
+    showToast("⚔️ Entering Guild Battlefield...", "#dc2626");
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'startGuildBattle',
+          token: sessionToken,
+          studentId: hero.studentId,
+          targetGuildId
+        })
+      });
+      const json = await res.json();
+      if (json.status === 'error') throw new Error(json.message);
+
+      hideToast();
+      const m = json.data;
+      activeGuildWar = {
+        matchId: m.matchId,
+        stakePoints: m.stakePoints,
+        myGuild: m.myGuild,
+        oppGuild: m.oppGuild,
+        defenderName: m.defenderName,
+        myTotalCP: m.myTeam.reduce((s, u) => s + u.cp, 0),
+        oppTotalCP: m.oppTeam.reduce((s, u) => s + u.cp, 0),
+        finished: false
+      };
+
+      renderGuildBattleScreen();
+    } catch (err) {
+      hideToast();
+      alert(err.message);
+    }
+  }
+
+  function renderGuildBattleScreen() {
+    if (!activeGuildWar) return;
+    const body = document.getElementById('guild-hub-body');
+    const w = activeGuildWar;
+    body.innerHTML = `
+      <div class="rpg-card" style="border-color:#ef4444; background:linear-gradient(180deg, rgba(127,29,29,0.35), rgba(15,23,42,0.95)); text-align:center; padding:16px;">
+        <div style="font-size:12px; color:#fca5a5; font-weight:900;">🔥 WEEKEND GUILD BATTLE • STAKES: ${w.stakePoints.toLocaleString()} GUILD PTS</div>
+        <div style="display:flex; justify-content:space-around; align-items:center; margin:16px 0;">
+          <div>
+            <div style="font-size:28px;">${w.myGuild.emblem}</div>
+            <div style="font-weight:900; font-size:14px; color:#fde047;">${w.myGuild.name}</div>
+            <div style="font-size:11px; color:#38bdf8;">Your Squad CP: ${w.myTotalCP.toLocaleString()}</div>
+          </div>
+          <div style="font-size:22px; font-weight:900; color:#ef4444;">VS</div>
+          <div>
+            <div style="font-size:28px;">${w.oppGuild.emblem}</div>
+            <div style="font-weight:900; font-size:14px; color:#f87171;">${w.oppGuild.name}</div>
+            <div style="font-size:11px; color:#cbd5e1;">Champion (${w.defenderName}): ${w.oppTotalCP.toLocaleString()} CP</div>
+          </div>
+        </div>
+        <div id="guild-war-log" style="font-size:12px; color:#e2e8f0; min-height:22px; margin-bottom:14px;">
+          Ready to clash! Do not close this window or it will count as a defeat.
+        </div>
+        <div style="display:flex; gap:10px; justify-content:center;">
+          <button id="guild-strike-btn" onclick="executeGuildClash()" style="background:linear-gradient(135deg,#f59e0b,#d97706); color:#000; border:none; border-radius:10px; padding:10px 18px; font-weight:900; font-size:13px; cursor:pointer;">
+            ⚔️ UNLEASH GUILD STRIKE
+          </button>
+          <button onclick="finalizeGuildBattle(false, true)" style="background:#334155; color:#fca5a5; border:1px solid #ef4444; border-radius:10px; padding:10px 14px; font-weight:800; font-size:12px; cursor:pointer;">
+            🏳️ Retreat (Lose)
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  function executeGuildClash() {
+    if (!activeGuildWar || activeGuildWar.finished) return;
+    const btn = document.getElementById('guild-strike-btn');
+    if (btn) btn.disabled = true;
+
+    const myRoll = activeGuildWar.myTotalCP * (0.85 + Math.random() * 0.35);
+    const oppRoll = activeGuildWar.oppTotalCP * (0.85 + Math.random() * 0.35);
+    const won = myRoll >= oppRoll;
+
+    document.getElementById('guild-war-log').innerHTML = won
+      ? `<span style="color:#4ade80; font-weight:900;">💥 Critical Clash! Your squad overwhelmed ${activeGuildWar.defenderName}!</span>`
+      : `<span style="color:#f87171; font-weight:900;">💀 Overpowered! ${activeGuildWar.defenderName} held the line!</span>`;
+
+    setTimeout(() => finalizeGuildBattle(won, false), 1100);
+  }
+
+  async function finalizeGuildBattle(won, isRetreat) {
+    if (!activeGuildWar || activeGuildWar.finished) return;
+    activeGuildWar.finished = true;
+    const matchId = activeGuildWar.matchId;
+    const stake = activeGuildWar.stakePoints;
+
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'finishGuildBattle',
+          token: sessionToken,
+          studentId: hero.studentId,
+          matchId,
+          won
+        })
+      });
+      const json = await res.json();
+      if (json.status === 'error') throw new Error(json.message);
+
+      guildHubCache = json.data.hub;
+      activeGuildWar = null;
+
+      if (won) {
+        playAnimeSFX('levelup');
+        showToast(`🏆 Guild Victory! Stole +${stake.toLocaleString()} Guild Points!`, "#10b981");
+      } else {
+        showToast(isRetreat ? `🏳️ Retreated! Lost -${stake.toLocaleString()} Guild Points.` : `💀 Defeated! Lost -${stake.toLocaleString()} Guild Points.`, "#dc2626");
+      }
+      setTimeout(hideToast, 3200);
+      renderGuildHub();
+    } catch (err) {
+      activeGuildWar = null;
+      alert("Guild Battle Sync Error: " + err.message);
+      loadGuildHub();
+    }
+  }
+
   function showToast(msg, bg) {
     const t = document.getElementById('toast');
     t.innerText = msg; t.style.background = bg; t.style.display = 'block';
@@ -1993,7 +2503,10 @@
   function hideToast() { document.getElementById('toast').style.display = 'none'; }
 
   window.addEventListener('beforeunload', (e) => {
-    if (hasUnsaved) { e.preventDefault(); e.returnValue = ''; }
+    if (hasUnsaved || (activeGuildWar && !activeGuildWar.finished)) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
   });
 
   Object.assign(window, {
@@ -2025,6 +2538,18 @@
     startPvpBattle,
     togglePvpSpeed,
     usePvpSkill,
-    switchPvpHero
+    switchPvpHero,
+    openGuildModal,
+    closeGuildModal,
+    loadGuildHub,
+    createNewGuild,
+    requestJoinGuild,
+    respondGuildRequest,
+    updateGuildProfile,
+    leaveCurrentGuild,
+    kickGuildMember,
+    initiateGuildBattle,
+    executeGuildClash,
+    finalizeGuildBattle
   });
 })();
