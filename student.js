@@ -1946,7 +1946,7 @@
       const asset = allChars.find(a => a.assetId === id);
       const u = hero.avatar.unlockedChars.find(x => x.id === id);
       if (!asset || !u) return null;
-      const stars = Math.max(1, Math.min(MAX_ALLOWED_STARS, Number(u.stars) || 1));
+      const stars = Math.max(1, Number(u.stars) || 1);
       const mult = (RARITY_MULT[asset.rarity] || 1.0) + ((stars - 1) * 0.1);
       const cp = Math.max(100, Math.floor(basePower * mult));
       return {
