@@ -162,6 +162,28 @@
     };
   }
 
+  // --- FACE CLOSE-UP HELPER FOR CIRCULAR PORTRAITS ---
+  function getFaceCloseupCss(asset, faceZoom = 2.35) {
+    const cols = Math.max(1, asset.meta?.cols || 1);
+    const rows = Math.max(1, asset.meta?.rows || 1);
+    const xDenom = (cols * faceZoom) - 1;
+    const yDenom = (rows * faceZoom) - 1;
+    const xPct = xDenom > 0 ? (0.48 / xDenom) * 100 : 50;
+    const yPct = yDenom > 0 ? (0.24 / yDenom) * 100 : 18;
+    return {
+      size: `${cols * faceZoom * 100}% ${rows * faceZoom * 100}%`,
+      pos: `${xPct}% ${yPct}%`
+    };
+  }
+
+  function applyPortraitCloseup(el, asset) {
+    if (!el || !asset) return;
+    const face = getFaceCloseupCss(asset, 2.35);
+    el.style.backgroundImage = `url(${asset.imageData})`;
+    el.style.backgroundSize = face.size;
+    el.style.backgroundPosition = face.pos;
+  }
+
   // --- ANIME THEME BGM & SFX ENGINE ---
   let audioCtx = null;
   let bgmPlaying = false;
@@ -922,11 +944,11 @@
     document.getElementById('enemy-boss-badge').innerText = enemy.isBoss ? 'BOSS' : `F${hero.towerFloor}`;
 
     const heroPort = document.getElementById('hud-hero-portrait');
-    if (charObj) applySpriteFrame(heroPort, charObj, 0, 0);
+    if (charObj) applyPortraitCloseup(heroPort, charObj);
     else setSilhouette(heroPort);
 
     const enemyPort = document.getElementById('hud-enemy-portrait');
-    applySpriteFrame(enemyPort, enemy.asset, 0, 0);
+    applyPortraitCloseup(enemyPort, enemy.asset);
 
     updateHPBars();
   }
@@ -1550,7 +1572,7 @@
     document.getElementById('pvp-lobby-shell').classList.add('hidden');
     document.getElementById('pvp-view-battle').classList.remove('hidden');
 
-    document.getElementById('pvp-b-myname').innerText = `${hero.name} (3v3)`;
+    document.getElementById('pvp-b-myname').innerText = hero.name;
     document.getElementById('pvp-b-oppname').innerText = `${opp.name} [${opp.className}]`;
     document.getElementById('pvp-battle-log').innerText = `⚔️ 3v3 Battle started vs ${opp.name}! Choose your skill!`;
 
@@ -1562,8 +1584,8 @@
     const myU = pvpBattle.myTeam[pvpBattle.myActiveIdx];
     const oppU = pvpBattle.oppTeam[pvpBattle.oppActiveIdx];
 
-    if (myU.asset) applySpriteFrame(document.getElementById('pvp-my-portrait'), myU.asset, 0, 0);
-    if (oppU.asset) applySpriteFrame(document.getElementById('pvp-opp-portrait'), oppU.asset, 0, 0);
+    if (myU.asset) applyPortraitCloseup(document.getElementById('pvp-my-portrait'), myU.asset);
+    if (oppU.asset) applyPortraitCloseup(document.getElementById('pvp-opp-portrait'), oppU.asset);
     document.getElementById('pvp-my-stars').innerText = '★'.repeat(Math.min(7, myU.stars || 1));
     document.getElementById('pvp-opp-stars').innerText = '★'.repeat(Math.min(7, oppU.stars || 1));
 
@@ -1586,28 +1608,38 @@
       : 'linear-gradient(180deg, #f43f5e, #9f1239)';
     turnEl.style.color = pvpBattle.turn === 'player' ? '#1e1b4b' : '#fff';
 
-    document.getElementById('pvp-my-bench').innerHTML = pvpBattle.myTeam.map((u, idx) =>
-      `<span style="padding:2px 8px; border-radius:99px; font-size:10px; font-weight:800; border:1px solid rgba(255,255,255,0.25); background:${u.hp > 0 ? (idx === pvpBattle.myActiveIdx ? '#0284c7' : 'rgba(15,23,42,0.85)') : '#450a0a'}; color:${u.hp > 0 ? '#fff' : '#f87171'};">${idx + 1}. ${u.name.split(' ')[0]} ${u.hp > 0 ? '❤️' : '💀'}</span>`
-    ).join('');
-
-    document.getElementById('pvp-opp-bench').innerHTML = pvpBattle.oppTeam.map((u, idx) =>
-      `<span style="padding:2px 8px; border-radius:99px; font-size:10px; font-weight:800; border:1px solid rgba(255,255,255,0.25); background:${u.hp > 0 ? (idx === pvpBattle.oppActiveIdx ? '#be123c' : 'rgba(15,23,42,0.85)') : '#450a0a'}; color:${u.hp > 0 ? '#fff' : '#f87171'};">${idx + 1}. ${u.name.split(' ')[0]} ${u.hp > 0 ? '❤️' : '💀'}</span>`
-    ).join('');
-
     const isMyTurn = pvpBattle.turn === 'player' && !pvpBattle.finished;
     document.getElementById('pvp-sk-0').disabled = !isMyTurn;
     document.getElementById('pvp-sk-1').disabled = !isMyTurn || myU.energy < 25;
     document.getElementById('pvp-sk-2').disabled = !isMyTurn || myU.energy < 20;
     document.getElementById('pvp-sk-3').disabled = !isMyTurn || myU.energy < 50;
 
-    document.getElementById('pvp-switch-row').innerHTML = pvpBattle.myTeam.map((u, idx) => {
-      const canSwitch = isMyTurn && idx !== pvpBattle.myActiveIdx && u.hp > 0;
-      return `
-        <button class="plus-btn" ${canSwitch ? '' : 'disabled'} style="padding:7px 4px; font-size:10px; background:${idx === pvpBattle.myActiveIdx ? '#0369a1' : '#1e293b'}; border:1px solid #475569; color:#fff; opacity:${u.hp > 0 ? 1 : 0.4};" onclick="switchPvpHero(${idx})">
-          ${idx === pvpBattle.myActiveIdx ? '★ Active' : (u.hp > 0 ? `Swap: ${u.name.split(' ')[0]}` : `💀 ${u.name.split(' ')[0]}`)}
-        </button>
-      `;
-    }).join('');
+    // FLOATING LEFT-SIDE 3v3 SQUAD SWITCHER (FACE PORTRAIT + CLICK TO SWAP)
+    const sideSwitcher = document.getElementById('pvp-side-switcher');
+    if (sideSwitcher) {
+      sideSwitcher.innerHTML = pvpBattle.myTeam.map((u, idx) => {
+        const isAct = idx === pvpBattle.myActiveIdx;
+        const isAlive = u.hp > 0;
+        const canSwitch = isMyTurn && !isAct && isAlive;
+        const cardClass = isAct ? 'active-unit' : (isAlive ? 'ready-unit' : 'fainted-unit');
+        const face = u.asset ? getFaceCloseupCss(u.asset, 2.25) : { size: '100% 100%', pos: 'center' };
+        const faceStyle = u.asset
+          ? `background-image:url(${u.asset.imageData}); background-size:${face.size}; background-position:${face.pos}; background-repeat:no-repeat;`
+          : '';
+        const hpPct = Math.max(0, Math.min(100, (u.hp / u.maxHp) * 100));
+
+        return `
+          <button class="pvp-side-card ${cardClass}" ${canSwitch ? '' : 'disabled'} onclick="switchPvpHero(${idx})" title="${isAct ? 'Currently Fighting' : (isAlive ? 'Click to swap in ' + u.name : 'Knocked Out')}">
+            <div class="pvp-side-face" style="${faceStyle}"></div>
+            <div class="pvp-side-meta">
+              <span class="pvp-side-tag">${isAct ? '★ ACTIVE' : (isAlive ? 'SWAP' : '💀 KO')}</span>
+              <span class="pvp-side-name">${u.name}</span>
+              <div class="pvp-side-hp-track"><div class="pvp-side-hp-fill" style="width:${hpPct}%;"></div></div>
+            </div>
+          </button>
+        `;
+      }).join('');
+    }
   }
 
   function playPvpUnitAction(side, rowIdx, onDone) {
