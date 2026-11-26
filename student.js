@@ -110,7 +110,6 @@
           const imgData = ctx.getImageData(0, startY, w, endY - startY).data;
           const rowHeightPx = endY - startY;
 
-          // Scan full row for vertical body bounds
           for (let y = 0; y < rowHeightPx; y++) {
             for (let x = 0; x < w; x += 2) {
               const alpha = imgData[(y * w + x) * 4 + 3];
@@ -122,7 +121,6 @@
             }
           }
 
-          // Scan Frame 0 specifically for exact head/face X & Y center
           let f0MinX = cellW, f0MaxX = 0, f0MinY = cellH, f0MaxY = 0, f0Found = false;
           const f0EndX = Math.min(w, Math.floor(cellW));
           for (let y = 0; y < rowHeightPx; y++) {
@@ -144,7 +142,6 @@
             const zoom = Math.max(1.0, Math.min(1.45, cellH / paddedHeight));
             const centerNorm = ((minY + maxY) * 0.5) / cellH;
 
-            // Head/face center sits ~25% down from the top of the sprite's opaque bounding box
             const bodyH = f0Found ? Math.max(1, f0MaxY - f0MinY) : contentHeight;
             const faceCenterX = f0Found ? ((f0MinX + f0MaxX) * 0.5) / cellW : 0.5;
             const faceCenterY = f0Found
@@ -203,7 +200,6 @@
     };
   }
 
-  // --- PIXEL-CENTERED FACE CLOSE-UP FOR CIRCULAR PORTRAITS ---
   function getFaceCloseupCss(asset, customScale = 1.0) {
     const cols = Math.max(1, asset.meta?.cols || 1);
     const rows = Math.max(1, asset.meta?.rows || 1);
@@ -422,7 +418,12 @@
       renderAll();
       loadLeaderboard();
 
-      if (isWeekendBoostActive()) {
+      if (json.data.claimedPvpReward) {
+        const rw = json.data.claimedPvpReward;
+        playAnimeSFX('levelup');
+        showToast(`🏆 Daily PvP Rank #${rw.rank} Reward: +${rw.points} Gacha Points!`, "#10b981");
+        setTimeout(hideToast, 4200);
+      } else if (isWeekendBoostActive()) {
         showToast("🔥 WEEKEND EVENT ACTIVE: 2x EXP & 2x LUCK!", "#f59e0b");
         setTimeout(hideToast, 3200);
       } else {
@@ -1233,10 +1234,7 @@
       const json = await res.json();
       if (json.status === 'error') throw new Error(json.message);
 
-      pvpPlayersCache = json.data.leaderboard || [];
-      if (Array.isArray(json.data.defeatedOpponents)) {
-        hero.avatar.defeatedOpponents = json.data.defeatedOpponents.map(String);
-      }
+      handlePvpServerPayload(json.data);
 
       const sortedByWins = pvpPlayersCache.slice().sort(
         (a, b) => (b.wins - a.wins) || (b.pvpPoints - a.pvpPoints) || (b.teamCP - a.teamCP)
@@ -1252,6 +1250,7 @@
         const isMe = String(p.studentId) === String(hero.studentId);
         const totalMatches = (p.wins || 0) + (p.losses || 0);
         const winRate = totalMatches > 0 ? Math.round((p.wins / totalMatches) * 100) : 0;
+        const dailyPrize = idx === 0 ? '100' : idx === 1 ? '90' : idx === 2 ? '75' : '50';
 
         return `
           <div class="pvp-challenger-card" style="${isMe ? 'border-color:var(--gold); background:rgba(245,158,11,0.18);' : ''}">
@@ -1268,7 +1267,7 @@
             </div>
             <div style="text-align:right; flex-shrink:0;">
               <div style="font-weight:900; font-size:13px; color:#4ade80;">${p.wins} WINS</div>
-              <div style="font-size:10px; color:var(--gold);">⭐ ${p.pvpPoints} Pts</div>
+              <div style="font-size:10px; color:var(--gold);">🎁 +${dailyPrize} Gacha Pts</div>
             </div>
           </div>
         `;
@@ -1372,6 +1371,27 @@
   }
 
   // --- 11. 3v3 GLOBAL PVP LOBBY & FULL-SCREEN ARCADE BATTLE ---
+  function handlePvpServerPayload(data) {
+    if (!data) return;
+    pvpPlayersCache = data.leaderboard || [];
+    if (Array.isArray(data.defeatedOpponents)) {
+      hero.avatar.defeatedOpponents = data.defeatedOpponents.map(String);
+    }
+    if (data.myPvpWins !== undefined) hero.avatar.pvpWins = Number(data.myPvpWins) || 0;
+    if (data.myPvpLosses !== undefined) hero.avatar.pvpLosses = Number(data.myPvpLosses) || 0;
+    if (data.myPvpPoints !== undefined) hero.avatar.pvpPoints = Number(data.myPvpPoints) || 1000;
+    if (data.unspentPoints !== undefined) {
+      hero.unspentPoints = Number(data.unspentPoints) || 0;
+      renderAll();
+    }
+    if (data.claimedPvpReward) {
+      const rw = data.claimedPvpReward;
+      playAnimeSFX('levelup');
+      showToast(`🏆 Daily PvP Rank #${rw.rank} Reward: +${rw.points} Gacha Points!`, "#10b981");
+      setTimeout(hideToast, 4200);
+    }
+  }
+
   function togglePvpSpeed() {
     pvpSpeedMult = pvpSpeedMult === 1 ? 2 : 1;
     const btn = document.getElementById('pvp-speed-btn');
@@ -1438,18 +1458,25 @@
       const json = await res.json();
       if (json.status === 'error') throw new Error(json.message);
 
-      pvpPlayersCache = json.data.leaderboard || [];
-      if (Array.isArray(json.data.defeatedOpponents)) {
-        hero.avatar.defeatedOpponents = json.data.defeatedOpponents.map(String);
-      }
+      handlePvpServerPayload(json.data);
+      document.getElementById('pvp-my-pts').innerText = hero.avatar.pvpPoints || 1000;
+      document.getElementById('pvp-my-record').innerText = `${hero.avatar.pvpWins || 0}W - ${hero.avatar.pvpLosses || 0}L`;
+
       const defeatedSet = new Set((hero.avatar.defeatedOpponents || []).map(String));
 
+      const rewardBannerHtml = `
+        <div style="background:rgba(245,158,11,0.14); border:1px solid rgba(245,158,11,0.45); border-radius:10px; padding:8px 10px; margin-bottom:10px; font-size:11px; color:#fde68a; text-align:center;">
+          ⏰ <b>Daily Midnight Reset Payout (Gacha Points):</b><br>
+          👑 1st: <b>+100 Pts</b> • 🥈 2nd: <b>+90 Pts</b> • 🥉 3rd: <b>+75 Pts</b> • Others: <b>+50 Pts</b>
+        </div>
+      `;
+
       if (pvpPlayersCache.length === 0) {
-        list.innerHTML = '<p style="text-align:center; color:#cbd5e1; padding:20px;">No players with heroes found yet.</p>';
+        list.innerHTML = rewardBannerHtml + '<p style="text-align:center; color:#cbd5e1; padding:20px;">No players with heroes found yet.</p>';
         return;
       }
 
-      list.innerHTML = pvpPlayersCache.map((p, idx) => {
+      list.innerHTML = rewardBannerHtml + pvpPlayersCache.map((p, idx) => {
         const medal = idx === 0 ? '👑' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
         const isMe = String(p.studentId) === String(hero.studentId);
         const isDefeated = defeatedSet.has(String(p.studentId));
@@ -1691,7 +1718,6 @@
     document.getElementById('pvp-sk-2').disabled = !isMyTurn || myU.energy < 20;
     document.getElementById('pvp-sk-3').disabled = !isMyTurn || myU.energy < 50;
 
-    // FLOATING LEFT-SIDE 3v3 SQUAD SWITCHER (FACE PORTRAIT + CLICK TO SWAP)
     const sideSwitcher = document.getElementById('pvp-side-switcher');
     if (sideSwitcher) {
       sideSwitcher.innerHTML = pvpBattle.myTeam.map((u, idx) => {
