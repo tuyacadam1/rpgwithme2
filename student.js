@@ -400,8 +400,13 @@
       hero.avatar.pvpLosses = Number(hero.avatar.pvpLosses) || 0;
       hero.avatar.pvpPoints = hero.avatar.pvpPoints !== undefined ? Number(hero.avatar.pvpPoints) : 1000;
 
-      if (!hero.stats.level) hero.stats.level = 1;
-      if (hero.stats.exp === undefined) hero.stats.exp = 0;
+      if (!hero.stats) hero.stats = { level: 1, exp: 0, str: 1, agi: 1, vit: 1, int: 1 };
+      hero.stats.level = Math.max(1, Number(hero.stats.level) || 1);
+      hero.stats.exp = Math.max(0, Number(hero.stats.exp) || 0);
+      hero.stats.str = Math.max(1, Number(hero.stats.str) || 1);
+      hero.stats.agi = Math.max(1, Number(hero.stats.agi) || 1);
+      hero.stats.vit = Math.max(1, Number(hero.stats.vit) || 1);
+      hero.stats.int = Math.max(1, Number(hero.stats.int) || 1);
 
       const validIds = new Set(hero.avatar.unlockedChars.map(u => u.id));
       if (!validIds.has(hero.avatar.equippedChar)) {
@@ -1079,13 +1084,54 @@
     renderArena();
   }
 
-  // --- 9. SAFE CONFLICT-FREE AUTO-SYNC + MANUAL SYNC ---
+  // --- 9. SAFE CONFLICT-FREE AUTO-SYNC + MANUAL SYNC (WITH MONOTONIC EXP GUARD) ---
+  function mergeServerStatsMonotonic(srvStats) {
+    if (!srvStats || !hero || !hero.stats) return;
+    const curLv = Math.max(1, Number(hero.stats.level) || 1);
+    const srvLv = Math.max(1, Number(srvStats.level) || 1);
+    const curExp = Math.max(0, Number(hero.stats.exp) || 0);
+    const srvExp = Math.max(0, Number(srvStats.exp) || 0);
+
+    if (srvLv > curLv) {
+      hero.stats.level = srvLv;
+      hero.stats.exp = srvExp;
+    } else if (srvLv === curLv) {
+      hero.stats.level = curLv;
+      hero.stats.exp = Math.max(curExp, srvExp);
+    }
+
+    ['str', 'agi', 'vit', 'int'].forEach(k => {
+      hero.stats[k] = Math.max(Number(hero.stats[k]) || 1, Number(srvStats[k]) || 1);
+    });
+  }
+
+  function buildSaveStatePayload() {
+    return JSON.stringify({
+      action: 'saveStudentState',
+      token: sessionToken,
+      studentId: hero.studentId,
+      state: {
+        avatar: { equippedChar: hero.avatar.equippedChar },
+        stats: {
+          level: Math.max(1, Number(hero.stats.level) || 1),
+          exp: Math.max(0, Number(hero.stats.exp) || 0),
+          str: Math.max(1, Number(hero.stats.str) || 1),
+          agi: Math.max(1, Number(hero.stats.agi) || 1),
+          vit: Math.max(1, Number(hero.stats.vit) || 1),
+          int: Math.max(1, Number(hero.stats.int) || 1)
+        },
+        towerFloor: hero.towerFloor,
+        equipped: hero.equipped
+      }
+    });
+  }
+
   function startSafeAutoSyncLoop() {
     setInterval(() => {
       if (hero && hasUnsaved && !isSyncing && !devToolsOpen) {
         syncProgress(true);
       }
-    }, 60000);
+    }, 30000);
   }
 
   async function syncProgress(silent = false) {
@@ -1098,34 +1144,35 @@
     isSyncing = true;
     queuedSync = false;
     const syncRevision = localEquipRevision;
+    const sentLevel = Number(hero.stats.level) || 1;
+    const sentExp = Number(hero.stats.exp) || 0;
+    const sentFloor = Number(hero.towerFloor) || 1;
     if (!silent) showToast("☁️ Syncing Hero...", "#10b981");
 
     try {
       const res = await fetch(API_URL, {
         method: 'POST',
-        body: JSON.stringify({
-          action: 'saveStudentState',
-          token: sessionToken,
-          studentId: hero.studentId,
-          state: {
-            avatar: { equippedChar: hero.avatar.equippedChar },
-            towerFloor: hero.towerFloor,
-            equipped: hero.equipped
-          }
-        })
+        body: buildSaveStatePayload()
       });
       const json = await res.json();
       if (json.status === 'error') throw new Error(json.message);
 
       hero.unspentPoints = Number(json.data.unspentPoints) || 0;
-      if (json.data.stats) hero.stats = json.data.stats;
-      if (json.data.towerFloor) hero.towerFloor = json.data.towerFloor;
+      if (json.data.stats) mergeServerStatsMonotonic(json.data.stats);
+      if (json.data.towerFloor) {
+        hero.towerFloor = Math.max(Number(hero.towerFloor) || 1, Number(json.data.towerFloor) || 1);
+      }
       if (json.data.inventory) hero.inventory = json.data.inventory;
+
+      const gainedMoreWhileSyncing =
+        (Number(hero.stats.level) > sentLevel) ||
+        (Number(hero.stats.level) === sentLevel && Number(hero.stats.exp) > sentExp) ||
+        (Number(hero.towerFloor) > sentFloor);
 
       if (syncRevision === localEquipRevision) {
         if (json.data.avatar) hero.avatar = json.data.avatar;
         if (json.data.equipped) hero.equipped = json.data.equipped;
-        hasUnsaved = false;
+        hasUnsaved = gainedMoreWhileSyncing;
       } else {
         if (json.data.avatar) {
           hero.avatar.unlockedChars = json.data.avatar.unlockedChars;
@@ -1163,6 +1210,22 @@
       }
     }
   }
+
+  function flushSyncOnExit() {
+    if (!hero || !hasUnsaved || devToolsOpen) return;
+    try {
+      const payload = buildSaveStatePayload();
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(API_URL, new Blob([payload], { type: 'text/plain;charset=utf-8' }));
+        hasUnsaved = false;
+      }
+    } catch (_) {}
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushSyncOnExit();
+  });
+  window.addEventListener('pagehide', flushSyncOnExit);
 
   function toggleMainLeaderboardMode() {
     mainLbMode = mainLbMode === 'tower' ? 'pvp' : 'tower';
@@ -2227,6 +2290,9 @@
     if (myGuild) {
       const isOwner = String(myGuild.ownerId) === String(hero.studentId);
       const currentEmblem = editGuildPhotoDataUrl || myGuild.emblem;
+      const myGuildStatusLine = isWeekend
+        ? `Rank #${myGuild.rank} • Projected Payout: <b>+${myGuild.projectedPayout} Gacha Pts</b> per member`
+        : `🛡️ Preparation Phase • Rankings &amp; Gacha payouts go live Saturday`;
 
       html += `
         <div class="rpg-card" style="border-color:var(--gold); background:rgba(245,158,11,0.12); margin-bottom:12px;">
@@ -2240,7 +2306,7 @@
                   👥 <b>${myGuild.memberCount}/${myGuild.maxMembers}</b> • 🏆 <b>${myGuild.totalPoints.toLocaleString()} Guild Pts</b> • ⚔️ ${myGuild.wins}W-${myGuild.losses}L
                 </div>
                 <div style="font-size:11px; color:#34d399; margin-top:2px;">
-                  Rank #${myGuild.rank} • Projected Payout: <b>+${myGuild.projectedPayout} Gacha Pts</b> per member
+                  ${myGuildStatusLine}
                 </div>
               </div>
             </div>
@@ -2341,14 +2407,20 @@
       </div>
     `;
 
-    html += `<div style="font-size:12px; font-weight:900; color:#fbbf24; margin-bottom:8px;">🏆 GUILD RANKINGS &amp; WEEKEND WAR</div>`;
+    html += `<div style="font-size:12px; font-weight:900; color:#fbbf24; margin-bottom:8px;">${isWeekend ? '🏆 GUILD RANKINGS &amp; WEEKEND WAR' : '🛡️ REGISTERED GUILDS (WAR STARTS SATURDAY)'}</div>`;
     if (guilds.length === 0) {
       html += `<p style="text-align:center; color:#94a3b8; font-size:12px; padding:14px;">No guilds formed yet. Create the first guild above!</p>`;
     } else {
       html += guilds.map((g, idx) => {
         const rank = idx + 1;
-        const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
+        const rankBadge = isWeekend
+          ? (rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`)
+          : '🛡️';
         const projectedPts = g.projectedPayout || getProjectedGuildPayout(rank);
+        const statsLine = isWeekend
+          ? `🏆 <b>${g.totalPoints.toLocaleString()} Pts</b> • <span style="color:#4ade80;">${g.wins}W</span>-<span style="color:#f87171;">${g.losses}L</span> • <span style="color:#34d399;">💎 +${projectedPts} Gacha Pts</span>`
+          : `🛡️ Base Pool: <b>${g.totalPoints.toLocaleString()} Pts</b> • <span style="color:#94a3b8;">Unranked (Starts Saturday)</span>`;
+
         const isMyGuild = myGuild && g.guildId === myGuild.guildId;
         let btnHtml = '';
 
@@ -2372,13 +2444,13 @@
         return `
           <div class="pvp-challenger-card" style="${isMyGuild ? 'border-color:var(--gold);' : ''}">
             <div style="display:flex; align-items:center; gap:10px; min-width:0;">
-              <span style="font-size:14px; font-weight:900; min-width:24px;">${medal}</span>
+              <span style="font-size:14px; font-weight:900; min-width:24px; text-align:center;">${rankBadge}</span>
               ${renderGuildEmblemHtml(g.emblem, 38)}
               <div style="min-width:0;">
                 <div style="font-weight:900; font-size:13px;">${g.name} <span style="font-size:11px; color:#38bdf8;">(${g.memberCount}/${g.maxMembers})</span></div>
                 <div style="font-size:10px; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">"${g.motto}"</div>
                 <div style="font-size:11px; color:#fde047; margin-top:2px;">
-                  🏆 <b>${g.totalPoints.toLocaleString()} Pts</b> • <span style="color:#4ade80;">${g.wins}W</span>-<span style="color:#f87171;">${g.losses}L</span> • <span style="color:#34d399;">💎 +${projectedPts} Gacha Pts</span>
+                  ${statsLine}
                 </div>
               </div>
             </div>
@@ -2705,7 +2777,8 @@
   function hideToast() { document.getElementById('toast').style.display = 'none'; }
 
   window.addEventListener('beforeunload', (e) => {
-    if (hasUnsaved || (pvpBattle && pvpBattle.mode === 'guild' && !pvpBattle.finished)) {
+    flushSyncOnExit();
+    if (pvpBattle && pvpBattle.mode === 'guild' && !pvpBattle.finished) {
       e.preventDefault();
       e.returnValue = '';
     }
