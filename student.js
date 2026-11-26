@@ -1,6 +1,15 @@
 (() => {
   const API_URL = "https://script.google.com/macros/s/AKfycbxPN7yKyqOwyyxIarj2BTkIcuMOomlfc52zCo2vK4AcVWg8TRofqKaRR-kj1yKiLiENWA/exec";
 
+  function escHtml(str) {
+    return String(str ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   // --- SAFE JSON POST HELPER (HANDLES NON-JSON / HTML REDIRECTS CLEANLY) ---
   async function apiPost(payload) {
     const res = await fetch(API_URL, {
@@ -15,7 +24,14 @@
     } catch (_) {
       throw new Error("Server returned non-JSON response. Verify Web App deployment ('Anyone') and API_URL.");
     }
-    if (json.status === 'error') throw new Error(json.message);
+    if (json.status === 'error') {
+      if (String(json.message || '').includes('Unauthorized')) {
+        sessionToken = '';
+        alert("Session expired or invalid. Please log in again.");
+        location.reload();
+      }
+      throw new Error(json.message);
+    }
     return json;
   }
 
@@ -453,14 +469,12 @@
   function sanitizeGearAndInventory() {
     if (!hero) return;
 
-    // 1. Restore inventory from verified server snapshot if tampered in memory
     const legitMap = new Map();
     verifiedInventorySnapshot.forEach(item => {
       legitMap.set(item.id, item);
     });
     hero.inventory = verifiedInventorySnapshot.map(i => Object.assign({}, i));
 
-    // 2. Sanitize equipped slots: block forged/out-of-bounds items (e.g., Floor 9999 / Power 34B)
     if (!hero.equipped || typeof hero.equipped !== 'object') {
       hero.equipped = { head: null, weapon: null, armor: null, boots: null, accessory: null };
     }
@@ -487,7 +501,6 @@
       ) {
         hero.equipped[slot] = null;
       } else {
-        // Overwrite with clean immutable copy so mutated name/power fields are stripped
         hero.equipped[slot] = Object.assign({}, legitItem);
       }
     });
@@ -798,7 +811,6 @@
     setInterval(() => {
       if (idlePaused || devToolsOpen || !hero || idleTurn === 'animating') return;
 
-      // Speed-hack / timer-manipulation guard: enforce minimum real elapsed time between combat ticks
       const nowMs = Date.now();
       if (nowMs - lastCombatTickMs < 950) return;
       lastCombatTickMs = nowMs;
@@ -934,7 +946,7 @@
 
       const luckBadge = isWeekendBoostActive() ? ` <b style="color:#fde047;">[🍀2x LUCK]</b>` : '';
       document.getElementById('gacha-result-log').innerHTML =
-        `<span style="color:#e879f9;">🎉 ${json.data.pullResults.join(' • ')}${luckBadge}</span>`;
+        `<span style="color:#e879f9;">🎉 ${escHtml(json.data.pullResults.join(' • '))}${luckBadge}</span>`;
 
       hideToast();
       resetCombatRound();
@@ -992,9 +1004,9 @@
       const a = c.asset;
       const isSelected = hero.avatar.equippedChar === c.id;
       return `
-        <div class="char-card rarity-${a.rarity} ${isSelected ? 'active' : ''}" onclick="equipCharacter('${c.id}')">
+        <div class="char-card rarity-${escHtml(a.rarity)} ${isSelected ? 'active' : ''}" onclick="equipCharacter('${escHtml(c.id)}')">
           <div class="char-thumb" style="${getThumbSpriteStyle(a)}"></div>
-          <div style="font-size:10px; font-weight:800; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${a.name}</div>
+          <div style="font-size:10px; font-weight:800; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escHtml(a.name)}</div>
           <div style="font-size:9px; color:var(--gold);">★${c.stars} (${RARITY_MULT[a.rarity]}x)</div>
         </div>
       `;
@@ -1024,12 +1036,12 @@
 
         if (unlocked) {
           return `
-            <div class="rpg-card rarity-${a.rarity}" onclick="equipCharacter('${a.assetId}'); closeCollection();"
+            <div class="rpg-card rarity-${escHtml(a.rarity)}" onclick="equipCharacter('${escHtml(a.assetId)}'); closeCollection();"
               style="text-align:center; padding:10px 6px; cursor:pointer; position:relative; ${isDeployed ? 'box-shadow:0 0 14px rgba(245,158,11,0.65); border-color:var(--gold);' : ''}">
               ${isDeployed ? '<div style="position:absolute; top:4px; right:4px; background:var(--gold); color:#000; font-size:8px; font-weight:900; padding:1px 5px; border-radius:6px;">ACTIVE</div>' : ''}
               <div style="width:68px; height:68px; margin:0 auto; ${thumbStyle}"></div>
-              <div style="font-size:11px; font-weight:800; margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${a.name}</div>
-              <div style="font-size:9px; color:var(--gold); font-weight:700;">[${a.rarity}] ★${unlocked.stars}</div>
+              <div style="font-size:11px; font-weight:800; margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escHtml(a.name)}</div>
+              <div style="font-size:9px; color:var(--gold); font-weight:700;">[${escHtml(a.rarity)}] ★${unlocked.stars}</div>
               <div style="font-size:9px; color:#4ade80; margin-top:2px;">${RARITY_MULT[a.rarity]}x Power</div>
             </div>
           `;
@@ -1039,7 +1051,7 @@
               <div style="position:absolute; top:5px; right:6px; font-size:12px;">🔒</div>
               <div style="width:68px; height:68px; margin:0 auto; ${thumbStyle} filter:brightness(0);"></div>
               <div style="font-size:11px; font-weight:800; margin-top:6px; color:#64748b;">???</div>
-              <div style="font-size:9px; color:#475569; font-weight:700;">[${a.rarity}] LOCKED</div>
+              <div style="font-size:9px; color:#475569; font-weight:700;">[${escHtml(a.rarity)}] LOCKED</div>
               <div style="font-size:9px; color:#334155; margin-top:2px;">Summon to Unlock</div>
             </div>
           `;
@@ -1124,9 +1136,9 @@
       el.className = 'gear-slot ' + (item ? 'rarity-' + item.rarity : '');
       const displayIcon = (item && item.icon && item.icon !== '🪖') ? item.icon : s.defIcon;
       el.innerHTML = `
-        <div class="gear-icon">${displayIcon}</div>
-        <div class="gear-name">${item ? item.name : s.label}</div>
-        <div class="gear-stat">${item ? `[${item.rarity}] +${item.power}` : 'Empty'}</div>
+        <div class="gear-icon">${escHtml(displayIcon)}</div>
+        <div class="gear-name">${item ? escHtml(item.name) : s.label}</div>
+        <div class="gear-stat">${item ? `[${escHtml(item.rarity)}] +${item.power}` : 'Empty'}</div>
       `;
     });
   }
@@ -1147,17 +1159,17 @@
       const safeIcon = (item.slot === 'head' && item.icon === '🪖') ? '👑' : item.icon;
 
       return `
-        <div class="rpg-card rarity-${item.rarity}" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; ${isEquipped ? 'border-color:#4ade80; background:rgba(16,185,129,0.12);' : ''}">
+        <div class="rpg-card rarity-${escHtml(item.rarity)}" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; ${isEquipped ? 'border-color:#4ade80; background:rgba(16,185,129,0.12);' : ''}">
           <div style="display:flex; align-items:center; gap:10px;">
-            <span style="font-size:26px;">${safeIcon}</span>
+            <span style="font-size:26px;">${escHtml(safeIcon)}</span>
             <div>
-              <div style="font-weight:800; font-size:13px;">${item.name}</div>
-              <div style="font-size:11px; color:var(--muted);">[${item.rarity}] ${item.slot.toUpperCase()} • +${(item.power * 10).toLocaleString()} CP</div>
+              <div style="font-weight:800; font-size:13px;">${escHtml(item.name)}</div>
+              <div style="font-size:11px; color:var(--muted);">[${escHtml(item.rarity)}] ${escHtml(item.slot.toUpperCase())} • +${(item.power * 10).toLocaleString()} CP</div>
             </div>
           </div>
           ${isEquipped
             ? `<button class="plus-btn" disabled style="background:#065f46; color:#6ee7b7; border:1px solid #10b981; cursor:default;">✓ EQUIPPED</button>`
-            : `<button class="plus-btn" onclick="equipGear('${item.id}')">EQUIP</button>`
+            : `<button class="plus-btn" onclick="equipGear('${escHtml(item.id)}')">EQUIP</button>`
           }
         </div>
       `;
@@ -1417,7 +1429,7 @@
       if (json.data.newDrops && json.data.newDrops.length > 0) {
         const best = json.data.newDrops[json.data.newDrops.length - 1];
         document.getElementById('raid-result').innerHTML =
-          `<span style="color:#4ade80;">🎁 Loot Drop: [${best.rarity}] ${best.name} (+${best.power})!</span>`;
+          `<span style="color:#4ade80;">🎁 Loot Drop: [${escHtml(best.rarity)}] ${escHtml(best.name)} (+${best.power})!</span>`;
       }
 
       if (!silent) {
@@ -1501,8 +1513,8 @@
             <div style="display:flex; align-items:center; gap:8px;">
               <span style="font-size:15px; font-weight:900; min-width:26px; text-align:center; color:${idx < 3 ? 'var(--gold)' : 'var(--muted)'};">${medal}</span>
               <div>
-                <div style="font-weight:800; font-size:12px;">${r.name} <span style="color:#60a5fa; font-size:10px;">(Lv.${r.level})</span></div>
-                <div style="font-size:10px; color:#c084fc;">⚔️ ${r.heroName}</div>
+                <div style="font-weight:800; font-size:12px;">${escHtml(r.name)} <span style="color:#60a5fa; font-size:10px;">(Lv.${r.level})</span></div>
+                <div style="font-size:10px; color:#c084fc;">⚔️ ${escHtml(r.heroName)}</div>
               </div>
             </div>
             <div style="text-align:right;">
@@ -1513,7 +1525,7 @@
         `;
       }).join('');
     } catch (err) {
-      list.innerHTML = `<p style="text-align:center; color:#f87171; font-size:12px;">Error: ${err.message}</p>`;
+      list.innerHTML = `<p style="text-align:center; color:#f87171; font-size:12px;">Error: ${escHtml(err.message)}</p>`;
     }
   }
 
@@ -1560,7 +1572,7 @@
               <span style="font-size:16px; font-weight:900; min-width:28px; text-align:center; color:${idx < 3 ? 'var(--gold)' : '#cbd5e1'};">${medal}</span>
               <div style="min-width:0;">
                 <div style="font-weight:900; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                  ${p.name} <span style="color:#38bdf8; font-size:11px;">[${p.className}]</span>
+                  ${escHtml(p.name)} <span style="color:#38bdf8; font-size:11px;">[${escHtml(p.className)}]</span>
                 </div>
                 <div style="font-size:11px; color:#cbd5e1;">
                   <b style="color:#4ade80;">${p.wins}W</b> - <b style="color:#f87171;">${p.losses}L</b> (${winRate}% WR) • ⭐ ${p.pvpPoints} Rating • ${p.teamCP.toLocaleString()} CP
@@ -1575,7 +1587,7 @@
         `;
       }).join('');
     } catch (err) {
-      list.innerHTML = `<p style="text-align:center; color:#f87171; font-size:12px;">Error: ${err.message}</p>`;
+      list.innerHTML = `<p style="text-align:center; color:#f87171; font-size:12px;">Error: ${escHtml(err.message)}</p>`;
     }
   }
 
@@ -1628,8 +1640,8 @@
         html += missing.map(m => `
           <div class="rpg-card" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-color:#991b1b; background:rgba(153,27,27,0.18);">
             <div>
-              <div style="font-weight:800; font-size:13px; color:#fca5a5;">❌ ${m.taskName}</div>
-              <div style="font-size:10px; color:var(--muted);">Assigned on ${m.date}</div>
+              <div style="font-weight:800; font-size:13px; color:#fca5a5;">❌ ${escHtml(m.taskName)}</div>
+              <div style="font-size:10px; color:var(--muted);">Assigned on ${escHtml(m.date)}</div>
             </div>
             <span style="background:#7f1d1d; color:#fecaca; font-size:11px; font-weight:800; padding:3px 8px; border-radius:8px;">Missing (${m.points} Pts)</span>
           </div>
@@ -1643,8 +1655,8 @@
         html += completed.map(c => `
           <div class="rpg-card" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-color:#1e293b;">
             <div>
-              <div style="font-weight:800; font-size:13px; color:#e2e8f0;">${c.taskName}</div>
-              <div style="font-size:10px; color:var(--muted);">${c.date}</div>
+              <div style="font-weight:800; font-size:13px; color:#e2e8f0;">${escHtml(c.taskName)}</div>
+              <div style="font-size:10px; color:var(--muted);">${escHtml(c.date)}</div>
             </div>
             <span style="color:var(--gold); font-weight:900; font-size:13px;">+${c.points} Pts</span>
           </div>
@@ -1653,7 +1665,7 @@
 
       body.innerHTML = html;
     } catch (err) {
-      body.innerHTML = `<p style="text-align:center; color:#f87171; padding:20px;">Error: ${err.message}</p>`;
+      body.innerHTML = `<p style="text-align:center; color:#f87171; padding:20px;">Error: ${escHtml(err.message)}</p>`;
     }
   }
 
@@ -1676,7 +1688,7 @@
       renderAll();
     }
     if (data.claimedPvpReward) {
-      const rw = data.claimedPvpReward;
+      const rw = json.data.claimedPvpReward;
       playAnimeSFX('levelup');
       showToast(`🏆 Daily PvP Rank #${rw.rank} Reward: +${rw.points} Gacha Points!`, "#10b981");
       setTimeout(hideToast, 4200);
@@ -1817,7 +1829,7 @@
 
         const squadThumbs = p.squad.map(sq => {
           const asset = (hero.assets || []).find(a => a.assetId === sq.assetId);
-          return asset ? `<div style="width:30px; height:30px; border-radius:6px; border:1px solid #475569; background-color:#090d16; ${getThumbSpriteStyle(asset)}" title="${sq.name}"></div>` : '';
+          return asset ? `<div style="width:30px; height:30px; border-radius:6px; border:1px solid #475569; background-color:#090d16; ${getThumbSpriteStyle(asset)}" title="${escHtml(sq.name)}"></div>` : '';
         }).join('');
 
         let actionBadge = '';
@@ -1826,7 +1838,7 @@
         } else if (isDefeated) {
           actionBadge = `<button class="pvp-won-btn" disabled>✓ Won Today</button>`;
         } else {
-          actionBadge = `<button class="pvp-fight-btn" onclick="startPvpBattle('${p.studentId}')">⚔️ Fight</button>`;
+          actionBadge = `<button class="pvp-fight-btn" onclick="startPvpBattle('${escHtml(p.studentId)}')">⚔️ Fight</button>`;
         }
 
         return `
@@ -1835,7 +1847,7 @@
               <span style="font-size:16px; font-weight:900; min-width:28px; text-align:center; color:${idx < 3 ? 'var(--gold)' : '#cbd5e1'};">${medal}</span>
               <div style="min-width:0;">
                 <div style="font-weight:900; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                  ${p.name} <span style="font-size:11px; color:#38bdf8;">[${p.className}]</span>
+                  ${escHtml(p.name)} <span style="font-size:11px; color:#38bdf8;">[${escHtml(p.className)}]</span>
                 </div>
                 <div style="font-size:11px; color:#e2e8f0; margin-bottom:5px;">
                   <b style="color:#4ade80;">${p.wins}W</b>-<b style="color:#f87171;">${p.losses}L</b> • <b style="color:${netColor};">${netSign} Net</b> • ⭐ ${p.pvpPoints} • ${p.teamCP.toLocaleString()} CP
@@ -1848,7 +1860,7 @@
         `;
       }).join('');
     } catch (err) {
-      list.innerHTML = `<p style="text-align:center; color:#f87171; padding:20px;">Error: ${err.message}</p>`;
+      list.innerHTML = `<p style="text-align:center; color:#f87171; padding:20px;">Error: ${escHtml(err.message)}</p>`;
     }
   }
 
@@ -1863,9 +1875,9 @@
       const asset = allChars.find(a => a.assetId === id);
       if (asset) {
         return `
-          <div class="rpg-card rarity-${asset.rarity}" style="text-align:center; padding:8px; cursor:pointer;" onclick="toggleDraftSquad('${id}')">
+          <div class="rpg-card rarity-${escHtml(asset.rarity)}" style="text-align:center; padding:8px; cursor:pointer;" onclick="toggleDraftSquad('${escHtml(id)}')">
             <div style="width:52px; height:52px; margin:0 auto; ${getThumbSpriteStyle(asset)}"></div>
-            <div style="font-size:10px; font-weight:800; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${asset.name}</div>
+            <div style="font-size:10px; font-weight:800; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escHtml(asset.name)}</div>
             <div style="font-size:9px; color:#f87171;">✕ Remove</div>
           </div>
         `;
@@ -1882,10 +1894,10 @@
       if (!asset) return '';
       const inSquad = draftSquadIds.includes(u.id);
       return `
-        <div class="rpg-card rarity-${asset.rarity}" onclick="toggleDraftSquad('${u.id}')"
+        <div class="rpg-card rarity-${escHtml(asset.rarity)}" onclick="toggleDraftSquad('${escHtml(u.id)}')"
           style="text-align:center; padding:8px 4px; cursor:pointer; ${inSquad ? 'border-color:#4ade80; box-shadow:0 0 10px rgba(74,222,128,0.45);' : ''}">
           <div style="width:48px; height:48px; margin:0 auto; ${getThumbSpriteStyle(asset)}"></div>
-          <div style="font-size:10px; font-weight:800; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${asset.name}</div>
+          <div style="font-size:10px; font-weight:800; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escHtml(asset.name)}</div>
           <div style="font-size:9px; color:${inSquad ? '#4ade80' : 'var(--gold)'};">${inSquad ? '✓ IN SQUAD' : `★${u.stars}`}</div>
         </div>
       `;
@@ -1984,7 +1996,7 @@
     });
   }
 
-  function startPvpBattle(opponentId) {
+  async function startPvpBattle(opponentId) {
     const defeatedSet = new Set((hero.avatar.defeatedOpponents || []).map(String));
     if (defeatedSet.has(String(opponentId))) {
       return alert("You already defeated this challenger today! Come back tomorrow for the daily reset.");
@@ -1996,11 +2008,28 @@
     const myTeam = buildMyPvpTeam();
     if (myTeam.length === 0) return alert("You need at least 1 unlocked hero!");
 
+    showToast("⚔️ Entering 3v3 PvP Arena...", "#7e22ce");
+    let matchId = '';
+    try {
+      const startRes = await apiPost({
+        action: 'startPvpMatch',
+        token: sessionToken,
+        studentId: hero.studentId,
+        opponentId: opp.studentId
+      });
+      matchId = startRes.data.matchId;
+      hideToast();
+    } catch (err) {
+      hideToast();
+      return alert("PvP Match Error: " + err.message);
+    }
+
     const oppTeam = hydrateServerSquad(opp.squad);
 
     clearPvpActionTimers();
     pvpBattle = {
       mode: 'pvp',
+      matchId,
       opponentId: opp.studentId,
       opponentName: opp.name,
       myTeam,
@@ -2077,7 +2106,7 @@
             <div class="pvp-side-face" style="${faceStyle}"></div>
             <div class="pvp-side-meta">
               <span class="pvp-side-tag">${isAct ? '★ ACTIVE' : (isAlive ? 'SWAP' : '💀 KO')}</span>
-              <span class="pvp-side-name">${u.name}</span>
+              <span class="pvp-side-name">${escHtml(u.name)}</span>
               <div class="pvp-side-hp-track"><div class="pvp-side-hp-fill" style="width:${hpPct}%;"></div></div>
             </div>
           </button>
@@ -2134,7 +2163,7 @@
 
     pvpBattle.myActiveIdx = newIdx;
     pvpBattle.turn = 'enemy';
-    document.getElementById('pvp-battle-log').innerHTML = `🔄 You switched in <b>${target.name}</b>!`;
+    document.getElementById('pvp-battle-log').innerHTML = `🔄 You switched in <b>${escHtml(target.name)}</b>!`;
     renderPvpBattleUI();
     setTimeout(runPvpEnemyTurn, Math.floor(850 / pvpSpeedMult));
   }
@@ -2156,7 +2185,7 @@
       const healAmt = Math.floor(myU.maxHp * 0.18);
       myU.hp = Math.min(myU.maxHp, myU.hp + healAmt);
       spawnFloatingDamage('pvp-comb-my', `+${healAmt} HP`, '#4ade80');
-      document.getElementById('pvp-battle-log').innerHTML = `🛡️ <b>${myU.name}</b> raised Iron Guard (50% Shield) and healed <b>+${healAmt} HP</b>!`;
+      document.getElementById('pvp-battle-log').innerHTML = `🛡️ <b>${escHtml(myU.name)}</b> raised Iron Guard (50% Shield) and healed <b>+${healAmt} HP</b>!`;
       pvpBattle.turn = 'enemy';
       renderPvpBattleUI();
       setTimeout(runPvpEnemyTurn, Math.floor(900 / pvpSpeedMult));
@@ -2193,7 +2222,7 @@
       }
       oppU.hp = Math.max(0, oppU.hp - dmg);
       spawnFloatingDamage('pvp-comb-opp', dmg, skillIdx === 3 ? '#fbbf24' : '#ffffff');
-      document.getElementById('pvp-battle-log').innerHTML = `⚔️ <b>${myU.name}</b> used <b>${label}</b> for <b>${dmg.toLocaleString()}</b> damage!`;
+      document.getElementById('pvp-battle-log').innerHTML = `⚔️ <b>${escHtml(myU.name)}</b> used <b>${label}</b> for <b>${dmg.toLocaleString()}</b> damage!`;
       renderPvpBattleUI();
 
       setTimeout(() => {
@@ -2208,7 +2237,7 @@
             return;
           }
           pvpBattle.oppActiveIdx = nextOppIdx;
-          document.getElementById('pvp-battle-log').innerHTML += ` 💀 ${oppU.name} fainted! <b>${pvpBattle.oppTeam[nextOppIdx].name}</b> enters!`;
+          document.getElementById('pvp-battle-log').innerHTML += ` 💀 ${escHtml(oppU.name)} fainted! <b>${escHtml(pvpBattle.oppTeam[nextOppIdx].name)}</b> enters!`;
         }
 
         pvpBattle.turn = 'enemy';
@@ -2227,7 +2256,7 @@
     const healthyBenchIdx = pvpBattle.oppTeam.findIndex((u, i) => i !== pvpBattle.oppActiveIdx && u.hp > u.maxHp * 0.45);
     if (oppU.hp < oppU.maxHp * 0.25 && healthyBenchIdx !== -1 && Math.random() < 0.5) {
       pvpBattle.oppActiveIdx = healthyBenchIdx;
-      document.getElementById('pvp-battle-log').innerHTML = `🔄 ${pvpBattle.opponentName} switched to <b>${pvpBattle.oppTeam[healthyBenchIdx].name}</b>!`;
+      document.getElementById('pvp-battle-log').innerHTML = `🔄 ${escHtml(pvpBattle.opponentName)} switched to <b>${escHtml(pvpBattle.oppTeam[healthyBenchIdx].name)}</b>!`;
       pvpBattle.turn = 'player';
       renderPvpBattleUI();
       return;
@@ -2239,7 +2268,7 @@
       const healAmt = Math.floor(oppU.maxHp * 0.18);
       oppU.hp = Math.min(oppU.maxHp, oppU.hp + healAmt);
       spawnFloatingDamage('pvp-comb-opp', `+${healAmt} HP`, '#4ade80');
-      document.getElementById('pvp-battle-log').innerHTML = `🛡️ Enemy <b>${oppU.name}</b> used Guard &amp; healed <b>+${healAmt} HP</b>!`;
+      document.getElementById('pvp-battle-log').innerHTML = `🛡️ Enemy <b>${escHtml(oppU.name)}</b> used Guard &amp; healed <b>+${healAmt} HP</b>!`;
       pvpBattle.turn = 'player';
       renderPvpBattleUI();
       return;
@@ -2273,7 +2302,7 @@
       }
       myU.hp = Math.max(0, myU.hp - dmg);
       spawnFloatingDamage('pvp-comb-my', dmg, '#f87171');
-      document.getElementById('pvp-battle-log').innerHTML = `🔥 Enemy <b>${oppU.name}</b> used <b>${label}</b> for <b>${dmg.toLocaleString()}</b> damage!`;
+      document.getElementById('pvp-battle-log').innerHTML = `🔥 Enemy <b>${escHtml(oppU.name)}</b> used <b>${label}</b> for <b>${dmg.toLocaleString()}</b> damage!`;
       renderPvpBattleUI();
 
       setTimeout(() => {
@@ -2288,7 +2317,7 @@
             return;
           }
           pvpBattle.myActiveIdx = nextMyIdx;
-          document.getElementById('pvp-battle-log').innerHTML += ` 💀 ${myU.name} fainted! <b>${pvpBattle.myTeam[nextMyIdx].name}</b> steps up!`;
+          document.getElementById('pvp-battle-log').innerHTML += ` 💀 ${escHtml(myU.name)} fainted! <b>${escHtml(pvpBattle.myTeam[nextMyIdx].name)}</b> steps up!`;
         }
 
         pvpBattle.turn = 'player';
@@ -2314,6 +2343,7 @@
         token: sessionToken,
         studentId: hero.studentId,
         opponentId: pvpBattle.opponentId,
+        matchId: pvpBattle.matchId,
         won: won
       });
 
@@ -2429,7 +2459,7 @@
     if (val.startsWith('data:image/')) {
       return `<img src="${val}" style="width:${sizePx}px; height:${sizePx}px; border-radius:10px; object-fit:cover; border:1.5px solid var(--gold); background:#090d16; flex-shrink:0;" alt="Guild Photo" />`;
     }
-    return `<div style="width:${sizePx}px; height:${sizePx}px; border-radius:10px; border:1.5px solid #475569; background:#090d16; display:inline-flex; align-items:center; justify-content:center; font-size:${Math.round(sizePx * 0.55)}px; flex-shrink:0;">${val}</div>`;
+    return `<div style="width:${sizePx}px; height:${sizePx}px; border-radius:10px; border:1.5px solid #475569; background:#090d16; display:inline-flex; align-items:center; justify-content:center; font-size:${Math.round(sizePx * 0.55)}px; flex-shrink:0;">${escHtml(val)}</div>`;
   }
 
   function compressGuildPhotoFile(file, callback) {
@@ -2532,7 +2562,7 @@
 
       renderGuildHub();
     } catch (err) {
-      body.innerHTML = `<p style="text-align:center; color:#f87171; padding:20px;">Error: ${err.message}</p>`;
+      body.innerHTML = `<p style="text-align:center; color:#f87171; padding:20px;">Error: ${escHtml(err.message)}</p>`;
     }
   }
 
@@ -2555,8 +2585,8 @@
             <div style="display:flex; gap:10px; align-items:center; min-width:0;">
               ${renderGuildEmblemHtml(myGuild.emblem, 48)}
               <div style="min-width:0;">
-                <div style="font-size:16px; font-weight:900; color:#fde047;">${myGuild.name}</div>
-                <div style="font-size:11px; color:#cbd5e1; margin-top:2px;">"${myGuild.motto}"</div>
+                <div style="font-size:16px; font-weight:900; color:#fde047;">${escHtml(myGuild.name)}</div>
+                <div style="font-size:11px; color:#cbd5e1; margin-top:2px;">"${escHtml(myGuild.motto)}"</div>
                 <div style="font-size:11px; color:#38bdf8; margin-top:4px;">
                   👥 <b>${myGuild.memberCount}/${myGuild.maxMembers}</b> • 🏆 <b>${myGuild.totalPoints.toLocaleString()} Guild Pts</b> • ⚔️ ${myGuild.wins}W-${myGuild.losses}L
                 </div>
@@ -2581,10 +2611,10 @@
                 📷 Upload Photo
                 <input type="file" accept="image/*" style="display:none;" onchange="handleEditGuildPhotoSelect(this)">
               </label>
-              <input id="edit-guild-name" value="${myGuild.name}" maxlength="28" placeholder="Guild Name" style="flex:1; background:#0f172a; color:#fff; border:1px solid #475569; border-radius:6px; padding:6px 8px; font-size:12px;">
+              <input id="edit-guild-name" value="${escHtml(myGuild.name)}" maxlength="28" placeholder="Guild Name" style="flex:1; background:#0f172a; color:#fff; border:1px solid #475569; border-radius:6px; padding:6px 8px; font-size:12px;">
             </div>
             <div style="display:flex; gap:6px;">
-              <input id="edit-guild-motto" value="${myGuild.motto}" maxlength="80" placeholder="Guild Motto / Profile" style="flex:1; background:#0f172a; color:#fff; border:1px solid #475569; border-radius:6px; padding:6px 8px; font-size:12px;">
+              <input id="edit-guild-motto" value="${escHtml(myGuild.motto)}" maxlength="80" placeholder="Guild Motto / Profile" style="flex:1; background:#0f172a; color:#fff; border:1px solid #475569; border-radius:6px; padding:6px 8px; font-size:12px;">
               <button onclick="updateGuildProfile()" class="plus-btn" style="font-size:11px;">💾 Save</button>
             </div>
           </div>
@@ -2596,10 +2626,10 @@
               <div style="font-size:11px; font-weight:900; color:#4ade80; margin-bottom:6px;">📩 JOIN REQUESTS (${myGuild.pendingDetails.length})</div>
               ${myGuild.pendingDetails.map(p => `
                 <div style="display:flex; justify-content:space-between; align-items:center; background:#0f172a; padding:6px 8px; border-radius:8px; margin-bottom:5px; font-size:12px;">
-                  <div><b>${p.name}</b> <span style="color:#38bdf8;">[${p.className}]</span> • ${p.cp.toLocaleString()} CP</div>
+                  <div><b>${escHtml(p.name)}</b> <span style="color:#38bdf8;">[${escHtml(p.className)}]</span> • ${p.cp.toLocaleString()} CP</div>
                   <div style="display:flex; gap:5px;">
-                    <button onclick="respondGuildRequest('${p.studentId}', true)" style="background:#059669; color:#fff; border:none; border-radius:6px; padding:4px 8px; font-weight:800; cursor:pointer;">✓ Approve</button>
-                    <button onclick="respondGuildRequest('${p.studentId}', false)" style="background:#991b1b; color:#fff; border:none; border-radius:6px; padding:4px 8px; font-weight:800; cursor:pointer;">✕</button>
+                    <button onclick="respondGuildRequest('${escHtml(p.studentId)}', true)" style="background:#059669; color:#fff; border:none; border-radius:6px; padding:4px 8px; font-weight:800; cursor:pointer;">✓ Approve</button>
+                    <button onclick="respondGuildRequest('${escHtml(p.studentId)}', false)" style="background:#991b1b; color:#fff; border:none; border-radius:6px; padding:4px 8px; font-weight:800; cursor:pointer;">✕</button>
                   </div>
                 </div>
               `).join('')}
@@ -2615,13 +2645,13 @@
             ${myGuild.memberDetails.map(m => `
               <div style="display:flex; justify-content:space-between; align-items:center; padding:5px 6px; border-bottom:1px solid #1e293b; font-size:11px;">
                 <div>
-                  ${m.isOwner ? '👑' : '⚔️'} <b>${m.name}</b> <span style="color:#64748b;">[${m.className}]</span>
+                  ${m.isOwner ? '👑' : '⚔️'} <b>${escHtml(m.name)}</b> <span style="color:#64748b;">[${escHtml(m.className)}]</span>
                 </div>
                 <div style="display:flex; align-items:center; gap:8px;">
                   <span style="color:${m.warPts > 0 ? '#fbbf24' : '#f87171'}; font-weight:800;">
                     +${m.warPts.toLocaleString()} Pts ${m.stolenNet > 0 ? `(+${m.stolenNet})` : (m.stolenNet < 0 ? `(${m.stolenNet})` : '')}
                   </span>
-                  ${(isOwner && !m.isOwner) ? `<button onclick="kickGuildMember('${m.studentId}')" style="background:transparent; color:#f87171; border:none; cursor:pointer; font-weight:900;" title="Kick Member">✕</button>` : ''}
+                  ${(isOwner && !m.isOwner) ? `<button onclick="kickGuildMember('${escHtml(m.studentId)}')" style="background:transparent; color:#f87171; border:none; cursor:pointer; font-weight:900;" title="Kick Member">✕</button>` : ''}
                 </div>
               </div>
             `).join('')}
@@ -2685,7 +2715,7 @@
           const activeDefenders = (g.memberDetails || []).filter(m => m.warPts > 0);
           btnHtml = isWeekend
             ? (activeDefenders.length > 0
-                ? `<button onclick="openGuildTargetPicker('${g.guildId}')" class="pvp-fight-btn">⚔️ Attack (${activeDefenders.length})</button>`
+                ? `<button onclick="openGuildTargetPicker('${escHtml(g.guildId)}')" class="pvp-fight-btn">⚔️ Attack (${activeDefenders.length})</button>`
                 : `<span style="font-size:10px; color:#94a3b8; font-weight:800;">💀 0 Pts Left</span>`)
             : `<span style="font-size:10px; color:#64748b;">Weekend Only</span>`;
         } else if (g.hasRequested) {
@@ -2693,7 +2723,7 @@
         } else if (g.memberCount >= g.maxMembers) {
           btnHtml = `<span style="font-size:11px; color:#f87171;">Full (20/20)</span>`;
         } else if (cooldownRemainingMs <= 0) {
-          btnHtml = `<button onclick="requestJoinGuild('${g.guildId}')" class="plus-btn" style="font-size:11px;">📩 Request Join</button>`;
+          btnHtml = `<button onclick="requestJoinGuild('${escHtml(g.guildId)}')" class="plus-btn" style="font-size:11px;">📩 Request Join</button>`;
         }
 
         return `
@@ -2702,8 +2732,8 @@
               <span style="font-size:14px; font-weight:900; min-width:24px; text-align:center;">${rankBadge}</span>
               ${renderGuildEmblemHtml(g.emblem, 38)}
               <div style="min-width:0;">
-                <div style="font-weight:900; font-size:13px;">${g.name} <span style="font-size:11px; color:#38bdf8;">(${g.memberCount}/${g.maxMembers})</span></div>
-                <div style="font-size:10px; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">"${g.motto}"</div>
+                <div style="font-weight:900; font-size:13px;">${escHtml(g.name)} <span style="font-size:11px; color:#38bdf8;">(${g.memberCount}/${g.maxMembers})</span></div>
+                <div style="font-size:10px; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">"${escHtml(g.motto)}"</div>
                 <div style="font-size:11px; color:#fde047; margin-top:2px;">
                   ${statsLine}
                 </div>
@@ -2732,7 +2762,7 @@
           <div style="display:flex; align-items:center; gap:8px;">
             ${renderGuildEmblemHtml(targetGuild.emblem, 36)}
             <div>
-              <div style="font-weight:900; font-size:14px; color:#f87171;">⚔️ Attack ${targetGuild.name}</div>
+              <div style="font-weight:900; font-size:14px; color:#f87171;">⚔️ Attack ${escHtml(targetGuild.name)}</div>
               <div style="font-size:11px; color:#cbd5e1;">Win a 3v3 battle to steal 25% of that member's Guild War Points!</div>
             </div>
           </div>
@@ -2744,11 +2774,11 @@
           return `
             <div class="pvp-challenger-card" style="margin-bottom:6px;">
               <div>
-                <div style="font-weight:800; font-size:13px;">${m.isOwner ? '👑' : '⚔️'} ${m.name} <span style="color:#38bdf8; font-size:11px;">[${m.className}]</span></div>
+                <div style="font-weight:800; font-size:13px;">${m.isOwner ? '👑' : '⚔️'} ${escHtml(m.name)} <span style="color:#38bdf8; font-size:11px;">[${escHtml(m.className)}]</span></div>
                 <div style="font-size:11px; color:#94a3b8;">3v3 Squad CP: ${m.cp.toLocaleString()} • Pool: <b style="color:${m.warPts > 0 ? '#fbbf24' : '#f87171'};">${m.warPts} Pts</b></div>
               </div>
               ${m.warPts > 0
-                ? `<button onclick="initiateGuildBattle('${targetGuild.guildId}', '${m.studentId}')" class="pvp-fight-btn">⚔️ Steal +${stealAmt}</button>`
+                ? `<button onclick="initiateGuildBattle('${escHtml(targetGuild.guildId)}', '${escHtml(m.studentId)}')" class="pvp-fight-btn">⚔️ Steal +${stealAmt}</button>`
                 : `<span style="font-size:11px; color:#64748b; font-weight:800;">💀 0 Pts</span>`
               }
             </div>
