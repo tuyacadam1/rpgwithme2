@@ -55,6 +55,9 @@
   let sessionToken = '';
   let verifiedServerFloor = 1;
   let verifiedServerLevel = 1;
+  let verifiedServerExp = 0;
+  let verifiedInventorySnapshot = [];
+  let lastCombatTickMs = 0;
   let hasUnsaved = false;
   let isSyncing = false;
   let queuedSync = false;
@@ -84,8 +87,15 @@
   let newGuildPhotoDataUrl = '';
   let editGuildPhotoDataUrl = '';
 
-  const RARITY_MULT = { Common: 1.0, Rare: 1.2, Epic: 1.5, Legendary: 2.0, Secret: 2.6, Divine: 3.5 };
-  const RARITY_ORDER = { Divine: 1, Secret: 2, Legendary: 3, Epic: 4, Rare: 5, Common: 6 };
+  const VALID_GEAR_SLOTS = Object.freeze(['head', 'weapon', 'armor', 'boots', 'accessory']);
+  const VALID_RARITIES = Object.freeze(['Common', 'Rare', 'Epic', 'Legendary', 'Secret', 'Divine']);
+  const RARITY_MULT = Object.freeze({ Common: 1.0, Rare: 1.2, Epic: 1.5, Legendary: 2.0, Secret: 2.6, Divine: 3.5 });
+  const RARITY_ORDER = Object.freeze({ Divine: 1, Secret: 2, Legendary: 3, Epic: 4, Rare: 5, Common: 6 });
+
+  const MAX_ALLOWED_FLOOR = 500;
+  const MAX_ALLOWED_LEVEL = 500;
+  const MAX_ALLOWED_ITEM_POWER = 100000;
+  const MAX_ALLOWED_STARS = 7;
 
   // --- ANTI-TIE PVP NET SCORE HELPER (+10 per Win, -6 per Loss) ---
   function getPvpNetScore(wins, losses) {
@@ -409,6 +419,108 @@
     meta: { cols: 1, rows: 1 }
   };
 
+  // --- ANTI-CHEAT: INVENTORY, EQUIPPED GEAR & AVATAR SANITIZERS ---
+  function isValidGearItem(item) {
+    if (!item || typeof item !== 'object') return false;
+    if (!VALID_GEAR_SLOTS.includes(item.slot)) return false;
+    if (!VALID_RARITIES.includes(item.rarity)) return false;
+    const power = Number(item.power);
+    const floor = Number(item.floor);
+    if (!Number.isFinite(power) || power <= 0 || power > MAX_ALLOWED_ITEM_POWER) return false;
+    if (!Number.isFinite(floor) || floor < 1 || floor > MAX_ALLOWED_FLOOR) return false;
+    if (!item.id || typeof item.id !== 'string') return false;
+    return true;
+  }
+
+  function storeVerifiedInventory(rawInv) {
+    const clean = (Array.isArray(rawInv) ? rawInv : [])
+      .filter(isValidGearItem)
+      .map(item => Object.freeze({
+        id: String(item.id),
+        slot: String(item.slot),
+        icon: String(item.icon || ''),
+        name: String(item.name || 'Gear'),
+        rarity: String(item.rarity),
+        floor: Math.floor(Number(item.floor)),
+        power: Math.floor(Number(item.power))
+      }));
+    verifiedInventorySnapshot = clean;
+    if (hero) {
+      hero.inventory = clean.map(i => Object.assign({}, i));
+    }
+  }
+
+  function sanitizeGearAndInventory() {
+    if (!hero) return;
+
+    // 1. Restore inventory from verified server snapshot if tampered in memory
+    const legitMap = new Map();
+    verifiedInventorySnapshot.forEach(item => {
+      legitMap.set(item.id, item);
+    });
+    hero.inventory = verifiedInventorySnapshot.map(i => Object.assign({}, i));
+
+    // 2. Sanitize equipped slots: block forged/out-of-bounds items (e.g., Floor 9999 / Power 34B)
+    if (!hero.equipped || typeof hero.equipped !== 'object') {
+      hero.equipped = { head: null, weapon: null, armor: null, boots: null, accessory: null };
+    }
+
+    VALID_GEAR_SLOTS.forEach(slot => {
+      const eq = hero.equipped[slot];
+      if (!eq) {
+        hero.equipped[slot] = null;
+        return;
+      }
+
+      if (!isValidGearItem(eq) || eq.slot !== slot) {
+        hero.equipped[slot] = null;
+        return;
+      }
+
+      const legitItem = legitMap.get(String(eq.id));
+      if (
+        !legitItem ||
+        legitItem.slot !== slot ||
+        legitItem.rarity !== eq.rarity ||
+        Number(legitItem.power) !== Number(eq.power) ||
+        Number(legitItem.floor) !== Number(eq.floor)
+      ) {
+        hero.equipped[slot] = null;
+      } else {
+        // Overwrite with clean immutable copy so mutated name/power fields are stripped
+        hero.equipped[slot] = Object.assign({}, legitItem);
+      }
+    });
+  }
+
+  function sanitizeAvatar() {
+    if (!hero || !hero.avatar) return;
+    const validAssetIds = new Set(
+      (hero.assets || []).filter(a => a && a.type === 'character').map(a => String(a.assetId))
+    );
+
+    const rawUnlocked = Array.isArray(hero.avatar.unlockedChars) ? hero.avatar.unlockedChars : [];
+    const seen = new Set();
+    hero.avatar.unlockedChars = rawUnlocked
+      .filter(u => u && validAssetIds.has(String(u.id)) && !seen.has(String(u.id)))
+      .map(u => {
+        seen.add(String(u.id));
+        const stars = Math.max(1, Math.min(MAX_ALLOWED_STARS, Math.floor(Number(u.stars) || 1)));
+        return { id: String(u.id), stars };
+      });
+
+    if (hero.avatar.equippedChar && !seen.has(String(hero.avatar.equippedChar))) {
+      hero.avatar.equippedChar = hero.avatar.unlockedChars.length > 0 ? hero.avatar.unlockedChars[0].id : null;
+    }
+
+    if (Array.isArray(hero.avatar.pvpSquad)) {
+      hero.avatar.pvpSquad = hero.avatar.pvpSquad
+        .map(String)
+        .filter(id => seen.has(id))
+        .slice(0, 3);
+    }
+  }
+
   // --- 1. LOGIN ---
   async function loginStudent() {
     const studentId = document.getElementById('student-id-input').value.trim();
@@ -423,8 +535,11 @@
 
       hero = json.data;
       sessionToken = json.data.token || '';
-      verifiedServerFloor = Math.max(1, Number(hero.towerFloor) || 1);
-      verifiedServerLevel = Math.max(1, Number(hero.stats?.level) || 1);
+      verifiedServerFloor = Math.max(1, Math.min(MAX_ALLOWED_FLOOR, Math.floor(Number(hero.towerFloor) || 1)));
+      verifiedServerLevel = Math.max(1, Math.min(MAX_ALLOWED_LEVEL, Math.floor(Number(hero.stats?.level) || 1)));
+      verifiedServerExp = Math.max(0, Math.floor(Number(hero.stats?.exp) || 0));
+
+      storeVerifiedInventory(hero.inventory);
 
       if (!hero.avatar || !Array.isArray(hero.avatar.unlockedChars)) {
         hero.avatar = { unlockedChars: [], equippedChar: null, pityEpic: 0, pityLeg: 0, pitySecret: 0, pityDivine: 0, pvpSquad: [], pvpWins: 0, pvpLosses: 0, pvpPoints: 1000, defeatedOpponents: [] };
@@ -441,16 +556,13 @@
 
       if (!hero.stats) hero.stats = { level: 1, exp: 0, str: 1, agi: 1, vit: 1, int: 1 };
       hero.stats.level = verifiedServerLevel;
-      hero.stats.exp = Math.max(0, Number(hero.stats.exp) || 0);
+      hero.stats.exp = verifiedServerExp;
       hero.stats.str = verifiedServerLevel;
       hero.stats.agi = verifiedServerLevel;
       hero.stats.vit = verifiedServerLevel;
       hero.stats.int = verifiedServerLevel;
 
-      const validIds = new Set(hero.avatar.unlockedChars.map(u => u.id));
-      if (!validIds.has(hero.avatar.equippedChar)) {
-        hero.avatar.equippedChar = hero.avatar.unlockedChars.length > 0 ? hero.avatar.unlockedChars[0].id : null;
-      }
+      enforceClientIntegrity();
 
       (hero.assets || []).forEach(a => analyzeSpriteSheet(a));
 
@@ -625,10 +737,12 @@
   }
 
   function grantTowerExp(amount) {
-    hero.stats.exp = (Number(hero.stats.exp) || 0) + amount;
+    enforceClientIntegrity();
+    const safeGain = Math.max(0, Math.min(getFloorExpReward(hero.towerFloor, true), Math.floor(Number(amount) || 0)));
+    hero.stats.exp = (Number(hero.stats.exp) || 0) + safeGain;
     let leveledUp = false;
 
-    while (hero.stats.exp >= getExpNeeded(hero.stats.level)) {
+    while (hero.stats.exp >= getExpNeeded(hero.stats.level) && hero.stats.level < MAX_ALLOWED_LEVEL) {
       hero.stats.exp -= getExpNeeded(hero.stats.level);
       hero.stats.level += 1;
       hero.stats.str = hero.stats.level;
@@ -638,6 +752,7 @@
       leveledUp = true;
     }
 
+    verifiedServerExp = hero.stats.exp;
     hasUnsaved = true;
     if (leveledUp) {
       playAnimeSFX('levelup');
@@ -682,6 +797,11 @@
   function startIdleCombatLoop() {
     setInterval(() => {
       if (idlePaused || devToolsOpen || !hero || idleTurn === 'animating') return;
+
+      // Speed-hack / timer-manipulation guard: enforce minimum real elapsed time between combat ticks
+      const nowMs = Date.now();
+      if (nowMs - lastCombatTickMs < 950) return;
+      lastCombatTickMs = nowMs;
 
       enforceClientIntegrity();
       const activeChar = getEquippedCharacterObj();
@@ -767,7 +887,9 @@
     const expGain = getFloorExpReward(clearedFloor, enemy.isBoss);
     grantTowerExp(expGain);
 
-    hero.towerFloor++;
+    if (hero.towerFloor < MAX_ALLOWED_FLOOR) {
+      hero.towerFloor++;
+    }
     hasUnsaved = true;
 
     const weekendTag = isWeekend ? ` <b style="color:#fde047;">🔥[2x WEEKEND]</b>` : '';
@@ -808,6 +930,7 @@
       playAnimeSFX('gacha');
       hero.avatar = json.data.avatar;
       hero.unspentPoints = Number(json.data.unspentPoints) || 0;
+      enforceClientIntegrity();
 
       const luckBadge = isWeekendBoostActive() ? ` <b style="color:#fde047;">[🍀2x LUCK]</b>` : '';
       document.getElementById('gacha-result-log').innerHTML =
@@ -833,6 +956,9 @@
   }
 
   function equipCharacter(assetId) {
+    enforceClientIntegrity();
+    const isUnlocked = hero.avatar.unlockedChars.some(u => String(u.id) === String(assetId));
+    if (!isUnlocked) return;
     if (hero.avatar.equippedChar === assetId) return;
     hero.avatar.equippedChar = assetId;
     localEquipRevision++;
@@ -930,18 +1056,21 @@
 
   // --- 6. COMBAT POWER & STATS ---
   function getTotalCP() {
+    enforceClientIntegrity();
     const charObj = getEquippedCharacterObj();
     if (!charObj) return 0;
 
-    enforceClientIntegrity();
     const s = hero.stats;
     let base = (s.str * 15) + (s.agi * 12) + (s.vit * 12) + (s.int * 15);
-    Object.values(hero.equipped).forEach(item => {
-      if (item) base += (item.power * 10);
+    VALID_GEAR_SLOTS.forEach(slot => {
+      const item = hero.equipped[slot];
+      if (item && isValidGearItem(item)) {
+        base += (Number(item.power) * 10);
+      }
     });
 
     const unlockedEntry = hero.avatar.unlockedChars.find(u => u.id === charObj.assetId);
-    const stars = unlockedEntry ? unlockedEntry.stars : 1;
+    const stars = unlockedEntry ? Math.max(1, Math.min(MAX_ALLOWED_STARS, Number(unlockedEntry.stars) || 1)) : 1;
     const mult = (RARITY_MULT[charObj.rarity] || 1.0) + ((stars - 1) * 0.1);
 
     return Math.floor(base * mult);
@@ -980,6 +1109,7 @@
 
   // --- 7. 5-SLOT GEAR & ARMORY ---
   function renderSlots() {
+    enforceClientIntegrity();
     const slotDefs = [
       { key: 'head', defIcon: '👑', label: 'Head' },
       { key: 'weapon', defIcon: '⚔️', label: 'Weapon' },
@@ -1002,6 +1132,7 @@
   }
 
   function openArmory(slotFilter) {
+    enforceClientIntegrity();
     const modal = document.getElementById('armory-modal');
     const list = document.getElementById('armory-items');
     document.getElementById('armory-title').innerText = slotFilter === 'all' ? '🎒 All Gear' : `🎒 ${slotFilter.toUpperCase()} Slot`;
@@ -1012,7 +1143,7 @@
 
     list.innerHTML = items.map(item => {
       const curEquipped = hero.equipped[item.slot];
-      const isEquipped = curEquipped && (curEquipped.id === item.id || (curEquipped.slot === item.slot && curEquipped.rarity === item.rarity));
+      const isEquipped = curEquipped && curEquipped.id === item.id;
       const safeIcon = (item.slot === 'head' && item.icon === '🪖') ? '👑' : item.icon;
 
       return `
@@ -1038,9 +1169,10 @@
   function closeArmory() { document.getElementById('armory-modal').classList.add('hidden'); }
 
   function equipGear(itemId) {
-    const item = hero.inventory.find(i => i.id === itemId);
-    if (!item) return;
-    hero.equipped[item.slot] = item;
+    enforceClientIntegrity();
+    const item = verifiedInventorySnapshot.find(i => i.id === String(itemId));
+    if (!item || !isValidGearItem(item)) return;
+    hero.equipped[item.slot] = Object.assign({}, item);
     localEquipRevision++;
     hasUnsaved = true;
     closeArmory();
@@ -1126,7 +1258,11 @@
   // --- 9. SERVER-AUTHORITATIVE SYNC & CLIENT INTEGRITY GUARD ---
   function enforceClientIntegrity() {
     if (!hero || !hero.stats) return;
-    const lv = Math.max(1, Math.min(500, Math.floor(Number(hero.stats.level) || 1)));
+
+    sanitizeAvatar();
+    sanitizeGearAndInventory();
+
+    const lv = Math.max(1, Math.min(MAX_ALLOWED_LEVEL, Math.floor(Number(hero.stats.level) || 1)));
     const maxStatClaimed = Math.max(
       Number(hero.stats.str) || 1,
       Number(hero.stats.agi) || 1,
@@ -1136,36 +1272,67 @@
 
     if (maxStatClaimed !== lv || lv > verifiedServerLevel + 10) {
       hero.stats.level = verifiedServerLevel;
-      hero.stats.exp = 0;
+      hero.stats.exp = verifiedServerExp;
       hero.stats.str = verifiedServerLevel;
       hero.stats.agi = verifiedServerLevel;
       hero.stats.vit = verifiedServerLevel;
       hero.stats.int = verifiedServerLevel;
+    } else {
+      hero.stats.level = lv;
+      hero.stats.str = lv;
+      hero.stats.agi = lv;
+      hero.stats.vit = lv;
+      hero.stats.int = lv;
+    }
+
+    const maxPossibleExp = getExpNeeded(hero.stats.level);
+    const rawExp = Math.floor(Number(hero.stats.exp) || 0);
+    if (rawExp < 0 || rawExp >= maxPossibleExp) {
+      hero.stats.exp = Math.max(0, Math.min(maxPossibleExp - 1, verifiedServerExp));
+    } else {
+      hero.stats.exp = rawExp;
     }
 
     const fl = Math.max(1, Math.floor(Number(hero.towerFloor) || 1));
-    if (fl > verifiedServerFloor + 15 || fl > 500) {
+    if (fl > verifiedServerFloor + 15 || fl > MAX_ALLOWED_FLOOR) {
       hero.towerFloor = verifiedServerFloor;
+    } else {
+      hero.towerFloor = fl;
     }
   }
 
   function mergeServerStatsMonotonic(srvStats) {
     if (!srvStats || !hero || !hero.stats) return;
-    const srvLv = Math.max(1, Number(srvStats.level) || 1);
-    const srvExp = Math.max(0, Number(srvStats.exp) || 0);
+    const srvLv = Math.max(1, Math.min(MAX_ALLOWED_LEVEL, Math.floor(Number(srvStats.level) || 1)));
+    const srvExp = Math.max(0, Math.floor(Number(srvStats.exp) || 0));
 
     hero.stats.level = srvLv;
     hero.stats.exp = srvExp;
-    hero.stats.str = Math.max(1, Number(srvStats.str) || srvLv);
-    hero.stats.agi = Math.max(1, Number(srvStats.agi) || srvLv);
-    hero.stats.vit = Math.max(1, Number(srvStats.vit) || srvLv);
-    hero.stats.int = Math.max(1, Number(srvStats.int) || srvLv);
+    hero.stats.str = srvLv;
+    hero.stats.agi = srvLv;
+    hero.stats.vit = srvLv;
+    hero.stats.int = srvLv;
     verifiedServerLevel = srvLv;
+    verifiedServerExp = srvExp;
   }
 
   function buildSaveStatePayloadObj() {
     enforceClientIntegrity();
     const lv = Math.max(1, Number(hero.stats.level) || 1);
+
+    const cleanEquipped = {};
+    const equippedIds = {};
+    VALID_GEAR_SLOTS.forEach(slot => {
+      const item = hero.equipped[slot];
+      if (item && isValidGearItem(item)) {
+        cleanEquipped[slot] = Object.assign({}, item);
+        equippedIds[slot] = item.id;
+      } else {
+        cleanEquipped[slot] = null;
+        equippedIds[slot] = null;
+      }
+    });
+
     return {
       action: 'saveStudentState',
       token: sessionToken,
@@ -1181,7 +1348,8 @@
           int: lv
         },
         towerFloor: Math.max(1, Math.floor(Number(hero.towerFloor) || 1)),
-        equipped: hero.equipped
+        equipped: cleanEquipped,
+        equippedIds: equippedIds
       }
     };
   }
@@ -1215,10 +1383,12 @@
       hero.unspentPoints = Number(json.data.unspentPoints) || 0;
       if (json.data.stats) mergeServerStatsMonotonic(json.data.stats);
       if (json.data.towerFloor) {
-        verifiedServerFloor = Math.max(1, Number(json.data.towerFloor) || 1);
+        verifiedServerFloor = Math.max(1, Math.min(MAX_ALLOWED_FLOOR, Math.floor(Number(json.data.towerFloor) || 1)));
         hero.towerFloor = verifiedServerFloor;
       }
-      if (json.data.inventory) hero.inventory = json.data.inventory;
+      if (json.data.inventory) {
+        storeVerifiedInventory(json.data.inventory);
+      }
 
       const gainedMoreWhileSyncing =
         (Number(hero.stats.level) > sentLevel) ||
@@ -1240,6 +1410,7 @@
         queuedSync = true;
       }
 
+      enforceClientIntegrity();
       resetCombatRound();
       renderAll();
 
@@ -1533,6 +1704,7 @@
 
   function openPvpModal() {
     if (!hero) return;
+    enforceClientIntegrity();
     if (hero.avatar.unlockedChars.length === 0) {
       return alert("Summon at least 1 Hero in the Gacha before entering 3v3 PvP!");
     }
@@ -1681,6 +1853,7 @@
   }
 
   function renderPvpSquadBuilder() {
+    enforceClientIntegrity();
     const slotsEl = document.getElementById('pvp-squad-slots');
     const rosterEl = document.getElementById('pvp-squad-roster');
     const allChars = (hero.assets || []).filter(a => a.type === 'character');
@@ -1743,6 +1916,7 @@
       });
 
       hero.avatar.pvpSquad = json.data.pvpSquad;
+      enforceClientIntegrity();
       showToast("✅ Squad Saved!", "#10b981");
       setTimeout(hideToast, 1400);
       switchPvpTab('lobby');
@@ -1758,8 +1932,9 @@
     const allChars = (hero.assets || []).filter(a => a.type === 'character');
     const s = hero.stats;
     let basePower = (s.str * 15) + (s.agi * 12) + (s.vit * 12) + (s.int * 15);
-    Object.values(hero.equipped).forEach(item => {
-      if (item) basePower += (item.power * 10);
+    VALID_GEAR_SLOTS.forEach(slot => {
+      const item = hero.equipped[slot];
+      if (item && isValidGearItem(item)) basePower += (Number(item.power) * 10);
     });
 
     let squadIds = (hero.avatar.pvpSquad || []).filter(id => hero.avatar.unlockedChars.some(u => u.id === id));
@@ -1771,7 +1946,7 @@
       const asset = allChars.find(a => a.assetId === id);
       const u = hero.avatar.unlockedChars.find(x => x.id === id);
       if (!asset || !u) return null;
-      const stars = Number(u.stars) || 1;
+      const stars = Math.max(1, Math.min(MAX_ALLOWED_STARS, Number(u.stars) || 1));
       const mult = (RARITY_MULT[asset.rarity] || 1.0) + ((stars - 1) * 0.1);
       const cp = Math.max(100, Math.floor(basePower * mult));
       return {
@@ -2697,6 +2872,7 @@
 
   async function initiateGuildBattle(targetGuildId, targetMemberId) {
     if (!hero) return;
+    enforceClientIntegrity();
     if (hero.avatar.unlockedChars.length === 0) {
       return alert("Summon at least 1 Hero in the Gacha before fighting in Guild Wars!");
     }
