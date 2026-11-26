@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Idle Tower Gacha RPG</title>
-  <link rel="stylesheet" href="style.css?v=7" />
+  <link rel="stylesheet" href="style.css?v=10" />
 </head>
 <body>
 
@@ -291,7 +291,14 @@
     <!-- FULL-SCREEN ARCADE 3v3 BATTLE VIEW -->
     <div id="pvp-view-battle" class="pvp-battle-fullscreen hidden">
 
-      <!-- TOP DUAL FIGHTER HUD -->
+      <!-- UNCLUTTERED TOP UTILITY BAR (VS + EXIT) -->
+      <div class="pvp-top-utility">
+        <span class="pvp-mode-tag">⚔️ 3v3 ARENA</span>
+        <div class="pvp-vs-emblem"><span>VS</span></div>
+        <button class="pvp-exit-btn" onclick="closePvpModal()">✕ Exit</button>
+      </div>
+
+      <!-- CLEAN 2-COLUMN DUAL FIGHTER HUD -->
       <div class="pvp-battle-hud">
         <!-- PLAYER HUD -->
         <div class="pvp-side left">
@@ -300,7 +307,7 @@
           </div>
           <div class="pvp-bars">
             <div class="pvp-name-row">
-              <span id="pvp-b-myname" class="pvp-player-title">You (3v3)</span>
+              <span id="pvp-b-myname" class="pvp-player-title">You</span>
               <span id="pvp-my-stars" class="pvp-stars">★★★</span>
             </div>
             <div class="arcade-hp-track">
@@ -308,17 +315,11 @@
               <span id="pvp-act-myhp" class="bar-overlay-txt">100/100</span>
             </div>
             <div class="energy-row">
-              <span>Energy: <b id="pvp-act-myen">30</b>/100</span>
+              <span class="en-txt">EN <b id="pvp-act-myen">30</b></span>
               <div class="energy-track"><div id="pvp-my-enbar" class="energy-fill" style="width:30%;"></div></div>
               <span id="pvp-my-shield-tag" style="color:#34d399;"></span>
             </div>
-            <div id="pvp-my-bench" class="squad-pills"></div>
           </div>
-        </div>
-
-        <!-- CENTER VS SHIELD -->
-        <div class="pvp-vs-emblem">
-          <span>VS</span>
         </div>
 
         <!-- OPPONENT HUD -->
@@ -327,18 +328,16 @@
             <div class="pvp-name-row">
               <span id="pvp-opp-stars" class="pvp-stars">★★★</span>
               <span id="pvp-b-oppname" class="pvp-player-title">Opponent</span>
-              <button class="pvp-exit-btn" onclick="closePvpModal()">✕ Close</button>
             </div>
             <div class="arcade-hp-track">
-              <div id="pvp-opp-hpbar" class="arcade-hp-fill hero-fill" style="width:100%;"></div>
+              <div id="pvp-opp-hpbar" class="arcade-hp-fill enemy-fill" style="width:100%;"></div>
               <span id="pvp-act-opphp" class="bar-overlay-txt">100/100</span>
             </div>
             <div class="energy-row">
               <span id="pvp-opp-shield-tag" style="color:#34d399;"></span>
               <div class="energy-track"><div id="pvp-opp-enbar" class="energy-fill opp-en" style="width:30%;"></div></div>
-              <span>Energy: <b id="pvp-act-oppen">30</b>/100</span>
+              <span class="en-txt">EN <b id="pvp-act-oppen">30</b></span>
             </div>
-            <div id="pvp-opp-bench" class="squad-pills right-align"></div>
           </div>
           <div class="portrait-ring enemy-ring">
             <div id="pvp-opp-portrait" class="portrait-sprite"></div>
@@ -351,13 +350,16 @@
         <div id="pvp-b-turn" class="turn-banner">YOUR TURN</div>
       </div>
 
-      <!-- LEFT SIDE SPEED TOGGLE -->
-      <div class="battle-side-controls">
-        <button id="pvp-speed-btn" class="speed-badge" onclick="togglePvpSpeed()">1x</button>
-      </div>
-
-      <!-- CENTER BATTLE STAGE -->
+      <!-- CENTER 3v3 BATTLE STAGE WITH LEFT-SIDE CHARACTER SWITCHER -->
       <div class="pvp-arena-stage">
+        <!-- FLOATING LEFT-SIDE 3v3 HERO SWITCHER (TAP PROFILE TO SWAP) -->
+        <div id="pvp-side-switcher" class="pvp-side-switcher"></div>
+
+        <!-- SPEED BUTTON -->
+        <div class="battle-side-controls">
+          <button id="pvp-speed-btn" class="speed-badge" onclick="togglePvpSpeed()">1x</button>
+        </div>
+
         <div class="combatant" id="pvp-comb-my">
           <div class="arena-sprite" id="pvp-sprite-my"></div>
           <div class="neon-ring cyan-ring"></div>
@@ -374,13 +376,8 @@
         ⚔️ Choose your skill!
       </div>
 
-      <!-- BOTTOM ARCADE ACTION BAR -->
+      <!-- BOTTOM ARCADE SKILL DECK -->
       <div class="pvp-bottom-deck">
-        <div class="pvp-switch-panel">
-          <div class="switch-label">SWITCH ACTIVE HERO (Uses Turn):</div>
-          <div id="pvp-switch-row" class="switch-btn-grid"></div>
-        </div>
-
         <div id="pvp-skills-grid" class="pvp-skill-cards">
           <button id="pvp-sk-0" class="skill-card sk-strike" onclick="usePvpSkill(0)">
             <span class="sk-icon">⚔️</span>
@@ -419,6 +416,6 @@
   <!-- TOAST NOTIFICATION -->
   <div id="toast"></div>
 
-  <script src="student.js?v=12"></script>
+  <script src="student.js?v=14"></script>
 </body>
 </html>
