@@ -2031,8 +2031,8 @@
 
     if (myU.asset) applyPortraitCloseup(document.getElementById('pvp-my-portrait'), myU.asset);
     if (oppU.asset) applyPortraitCloseup(document.getElementById('pvp-opp-portrait'), oppU.asset);
-    document.getElementById('pvp-my-stars').innerText = '★'.repeat(Math.min(7, myU.stars || 1));
-    document.getElementById('pvp-opp-stars').innerText = '★'.repeat(Math.min(7, oppU.stars || 1));
+    document.getElementById('pvp-my-stars').innerText = `★${myU.stars || 1}`;
+    document.getElementById('pvp-opp-stars').innerText = `★${oppU.stars || 1}`;
 
     document.getElementById('pvp-act-myhp').innerText = `${Math.max(0, myU.hp).toLocaleString()}/${myU.maxHp.toLocaleString()}`;
     document.getElementById('pvp-my-hpbar').style.width = `${Math.max(0, (myU.hp / myU.maxHp) * 100)}%`;
