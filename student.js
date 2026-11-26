@@ -62,7 +62,7 @@
   const RARITY_MULT = { Common: 1.0, Rare: 1.2, Epic: 1.5, Legendary: 2.0, Secret: 2.6, Divine: 3.5 };
   const RARITY_ORDER = { Divine: 1, Secret: 2, Legendary: 3, Epic: 4, Rare: 5, Common: 6 };
 
-  // --- AUTO-BOUNDING-BOX SPRITE ANALYZER ---
+  // --- AUTO-BOUNDING-BOX SPRITE ANALYZER (FULL BODY + FACE CENTER) ---
   const spriteBoundsCache = {};
 
   function analyzeSpriteSheet(asset) {
@@ -90,6 +90,7 @@
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         ctx.drawImage(img, 0, 0);
 
+        const cellW = w / cols;
         const cellH = h / rows;
 
         for (let r = 0; r < rows; r++) {
@@ -102,6 +103,7 @@
           const imgData = ctx.getImageData(0, startY, w, endY - startY).data;
           const rowHeightPx = endY - startY;
 
+          // Scan full row for vertical body bounds
           for (let y = 0; y < rowHeightPx; y++) {
             for (let x = 0; x < w; x += 2) {
               const alpha = imgData[(y * w + x) * 4 + 3];
@@ -113,20 +115,47 @@
             }
           }
 
+          // Scan Frame 0 specifically for exact head/face X & Y center
+          let f0MinX = cellW, f0MaxX = 0, f0MinY = cellH, f0MaxY = 0, f0Found = false;
+          const f0EndX = Math.min(w, Math.floor(cellW));
+          for (let y = 0; y < rowHeightPx; y++) {
+            for (let x = 0; x < f0EndX; x++) {
+              const alpha = imgData[(y * w + x) * 4 + 3];
+              if (alpha > 25) {
+                if (x < f0MinX) f0MinX = x;
+                if (x > f0MaxX) f0MaxX = x;
+                if (y < f0MinY) f0MinY = y;
+                if (y > f0MaxY) f0MaxY = y;
+                f0Found = true;
+              }
+            }
+          }
+
           if (foundAny && maxY > minY) {
             const contentHeight = maxY - minY;
             const paddedHeight = Math.min(cellH, contentHeight * 1.18);
             const zoom = Math.max(1.0, Math.min(1.45, cellH / paddedHeight));
             const centerNorm = ((minY + maxY) * 0.5) / cellH;
-            entry.rowMetrics[r] = { zoom, centerNorm };
+
+            // Head/face center sits ~25% down from the top of the sprite's opaque bounding box
+            const bodyH = f0Found ? Math.max(1, f0MaxY - f0MinY) : contentHeight;
+            const faceCenterX = f0Found ? ((f0MinX + f0MaxX) * 0.5) / cellW : 0.5;
+            const faceCenterY = f0Found
+              ? (f0MinY + bodyH * 0.25) / cellH
+              : (minY + contentHeight * 0.25) / cellH;
+            const faceZoom = Math.max(1.5, Math.min(2.6, (cellH / bodyH) * 1.65));
+
+            entry.rowMetrics[r] = { zoom, centerNorm, faceCenterX, faceCenterY, faceZoom };
           } else {
-            entry.rowMetrics[r] = { zoom: 1.08, centerNorm: 0.48 };
+            entry.rowMetrics[r] = { zoom: 1.08, centerNorm: 0.48, faceCenterX: 0.5, faceCenterY: 0.28, faceZoom: 1.9 };
           }
         }
         entry.ready = true;
+        if (typeof renderAll === 'function' && hero) renderAll();
+        if (typeof renderPvpBattleUI === 'function' && pvpBattle) renderPvpBattleUI();
       } catch (_) {
         for (let r = 0; r < rows; r++) {
-          entry.rowMetrics[r] = { zoom: 1.08, centerNorm: 0.48 };
+          entry.rowMetrics[r] = { zoom: 1.08, centerNorm: 0.48, faceCenterX: 0.5, faceCenterY: 0.28, faceZoom: 1.9 };
         }
         entry.ready = true;
       }
@@ -162,23 +191,34 @@
     };
   }
 
-  // --- FACE CLOSE-UP HELPER FOR CIRCULAR PORTRAITS ---
-  function getFaceCloseupCss(asset, faceZoom = 2.35) {
+  // --- PIXEL-CENTERED FACE CLOSE-UP FOR CIRCULAR PORTRAITS ---
+  function getFaceCloseupCss(asset, customScale = 1.0) {
     const cols = Math.max(1, asset.meta?.cols || 1);
     const rows = Math.max(1, asset.meta?.rows || 1);
-    const xDenom = (cols * faceZoom) - 1;
-    const yDenom = (rows * faceZoom) - 1;
-    const xPct = xDenom > 0 ? (0.48 / xDenom) * 100 : 50;
-    const yPct = yDenom > 0 ? (0.24 / yDenom) * 100 : 18;
+    const analysis = analyzeSpriteSheet(asset);
+    const metric = (analysis && analysis.ready && analysis.rowMetrics[0])
+      ? analysis.rowMetrics[0]
+      : { faceCenterX: 0.5, faceCenterY: 0.28, faceZoom: 1.9 };
+
+    const z = Math.max(1.3, metric.faceZoom * customScale);
+    const cx = metric.faceCenterX / cols;
+    const cy = metric.faceCenterY / rows;
+
+    const denomX = 1 - (1 / (cols * z));
+    const denomY = 1 - (1 / (rows * z));
+
+    const xPct = denomX > 0 ? Math.max(0, Math.min(100, ((cx - (0.5 / (cols * z))) / denomX) * 100)) : 50;
+    const yPct = denomY > 0 ? Math.max(0, Math.min(100, ((cy - (0.5 / (rows * z))) / denomY) * 100)) : 20;
+
     return {
-      size: `${cols * faceZoom * 100}% ${rows * faceZoom * 100}%`,
+      size: `${cols * z * 100}% ${rows * z * 100}%`,
       pos: `${xPct}% ${yPct}%`
     };
   }
 
   function applyPortraitCloseup(el, asset) {
     if (!el || !asset) return;
-    const face = getFaceCloseupCss(asset, 2.35);
+    const face = getFaceCloseupCss(asset, 1.0);
     el.style.backgroundImage = `url(${asset.imageData})`;
     el.style.backgroundSize = face.size;
     el.style.backgroundPosition = face.pos;
@@ -1622,7 +1662,7 @@
         const isAlive = u.hp > 0;
         const canSwitch = isMyTurn && !isAct && isAlive;
         const cardClass = isAct ? 'active-unit' : (isAlive ? 'ready-unit' : 'fainted-unit');
-        const face = u.asset ? getFaceCloseupCss(u.asset, 2.25) : { size: '100% 100%', pos: 'center' };
+        const face = u.asset ? getFaceCloseupCss(u.asset, 1.0) : { size: '100% 100%', pos: 'center' };
         const faceStyle = u.asset
           ? `background-image:url(${u.asset.imageData}); background-size:${face.size}; background-position:${face.pos}; background-repeat:no-repeat;`
           : '';
