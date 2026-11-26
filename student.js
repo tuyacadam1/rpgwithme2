@@ -62,6 +62,13 @@
   const RARITY_MULT = { Common: 1.0, Rare: 1.2, Epic: 1.5, Legendary: 2.0, Secret: 2.6, Divine: 3.5 };
   const RARITY_ORDER = { Divine: 1, Secret: 2, Legendary: 3, Epic: 4, Rare: 5, Common: 6 };
 
+  // --- WEEKEND BOOST CHECK (SATURDAY = 6, SUNDAY = 0) ---
+  function isWeekendBoostActive() {
+    if (hero && typeof hero.weekendBoost === 'boolean') return hero.weekendBoost;
+    const day = new Date().getDay();
+    return day === 0 || day === 6;
+  }
+
   // --- AUTO-BOUNDING-BOX SPRITE ANALYZER (FULL BODY + FACE CENTER) ---
   const spriteBoundsCache = {};
 
@@ -414,7 +421,13 @@
       startSafeAutoSyncLoop();
       renderAll();
       loadLeaderboard();
-      hideToast();
+
+      if (isWeekendBoostActive()) {
+        showToast("🔥 WEEKEND EVENT ACTIVE: 2x EXP & 2x LUCK!", "#f59e0b");
+        setTimeout(hideToast, 3200);
+      } else {
+        hideToast();
+      }
     } catch (err) {
       hideToast();
       alert("Login Error: " + err.message);
@@ -437,6 +450,12 @@
     document.querySelectorAll('.dock-btn').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
     if (drawerId === 'drawer-rank') refreshActiveLeaderboard();
+    if (drawerId === 'drawer-gacha' && isWeekendBoostActive()) {
+      const logEl = document.getElementById('gacha-result-log');
+      if (logEl && !logEl.innerHTML.trim()) {
+        logEl.innerHTML = `<span style="color:#fde047;">🔥 WEEKEND EVENT: 2x LUCK BOOST ACTIVE!</span>`;
+      }
+    }
   }
 
   function closeAllDrawers(btn) {
@@ -531,9 +550,18 @@
     el.style.backgroundPosition = bg.pos;
   }
 
-  // --- 3. EXP & LEVEL DISPLAY ---
+  // --- 3. BALANCED EXP CURVE & LEVEL DISPLAY ---
   function getExpNeeded(level) {
-    return Math.floor(100 * Math.pow(1.25, level - 1));
+    const lv = Math.max(1, Number(level) || 1);
+    return Math.floor(100 + ((lv - 1) * 150) + (Math.pow(lv, 2.15) * 12));
+  }
+
+  function getFloorExpReward(floor, isBoss) {
+    const fl = Math.max(1, Number(floor) || 1);
+    const baseExp = 60 + (fl * 45) + (Math.pow(fl, 1.85) * 8);
+    const bossMult = isBoss ? 3 : 1;
+    const weekendMult = isWeekendBoostActive() ? 2 : 1;
+    return Math.floor(baseExp * bossMult * weekendMult);
   }
 
   function grantTowerExp(amount) {
@@ -672,14 +700,16 @@
   function handleIdleVictory(enemy) {
     const resBox = document.getElementById('raid-result');
     const clearedFloor = hero.towerFloor;
+    const isWeekend = isWeekendBoostActive();
 
-    const expGain = (50 + (clearedFloor * 25)) * (enemy.isBoss ? 3 : 1);
+    const expGain = getFloorExpReward(clearedFloor, enemy.isBoss);
     grantTowerExp(expGain);
 
     hero.towerFloor++;
     hasUnsaved = true;
 
-    resBox.innerHTML = `<span style="color:#38bdf8;">⚔️ +${expGain} EXP! Advancing to Floor ${hero.towerFloor}...</span>`;
+    const weekendTag = isWeekend ? ` <b style="color:#fde047;">🔥[2x WEEKEND]</b>` : '';
+    resBox.innerHTML = `<span style="color:#38bdf8;">⚔️ +${expGain.toLocaleString()} EXP${weekendTag}! Advancing to Floor ${hero.towerFloor}...</span>`;
 
     resetCombatRound();
     renderAll();
@@ -703,7 +733,7 @@
     isRollingGacha = true;
     document.getElementById('roll-1-btn').disabled = true;
     document.getElementById('roll-5-btn').disabled = true;
-    showToast("✨ Summoning...", "#9333ea");
+    showToast(isWeekendBoostActive() ? "🍀 Summoning (2x Weekend Luck)..." : "✨ Summoning...", "#9333ea");
 
     try {
       const res = await fetch(API_URL, {
@@ -722,8 +752,9 @@
       hero.avatar = json.data.avatar;
       hero.unspentPoints = Number(json.data.unspentPoints) || 0;
 
+      const luckBadge = isWeekendBoostActive() ? ` <b style="color:#fde047;">[🍀2x LUCK]</b>` : '';
       document.getElementById('gacha-result-log').innerHTML =
-        `<span style="color:#e879f9;">🎉 ${json.data.pullResults.join(' • ')}</span>`;
+        `<span style="color:#e879f9;">🎉 ${json.data.pullResults.join(' • ')}${luckBadge}</span>`;
 
       hideToast();
       resetCombatRound();
@@ -1008,7 +1039,8 @@
     document.getElementById('hud-pts').innerText = hero.unspentPoints;
     document.getElementById('gacha-pts-display').innerText = hero.unspentPoints;
 
-    const badgeText = charObj ? `[${charObj.rarity}] ${charObj.name}` : 'No Hero (Open Gacha!)';
+    const weekendSuffix = isWeekendBoostActive() ? ' • 🔥2x WEEKEND' : '';
+    const badgeText = charObj ? `[${charObj.rarity}] ${charObj.name}${weekendSuffix}` : `No Hero (Open Gacha!)${weekendSuffix}`;
     document.getElementById('active-char-badge').innerText = badgeText;
     const drawerBadge = document.getElementById('drawer-char-badge');
     if (drawerBadge) drawerBadge.innerText = badgeText;
