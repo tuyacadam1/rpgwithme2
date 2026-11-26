@@ -4,586 +4,247 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>ClassQuest RPG — Student Portal</title>
-  <style>
-    :root {
-      --bg: #060913;
-      --panel: #0f172a;
-      --border: #1e293b;
-      --gold: #f59e0b;
-      --text: #f8fafc;
-      --muted: #94a3b8;
-    }
-
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    body {
-      margin: 0;
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-      background: radial-gradient(circle at top, #1e1b4b 0%, var(--bg) 65%);
-      color: var(--text);
-      min-height: 100vh;
-      overflow-x: hidden;
-      padding-bottom: 78px;
-    }
-
-    .hidden { display: none !important; }
-
-    .rpg-card {
-      background: rgba(15, 23, 42, 0.92);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 12px;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
-    }
-
-    /* Rarity Borders */
-    .rarity-Common { border-color: #64748b !important; }
-    .rarity-Rare { border-color: #3b82f6 !important; box-shadow: 0 0 10px rgba(59,130,246,0.25); }
-    .rarity-Epic { border-color: #a855f7 !important; box-shadow: 0 0 12px rgba(168,85,247,0.35); }
-    .rarity-Legendary { border-color: #f59e0b !important; box-shadow: 0 0 14px rgba(245,158,11,0.45); }
-    .rarity-Secret { border-color: #ec4899 !important; box-shadow: 0 0 16px rgba(236,72,153,0.55); }
-    .rarity-Divine { border-color: #fde047 !important; box-shadow: 0 0 20px rgba(253,224,71,0.75); }
-
-    /* Login Screen */
-    #login-screen {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      padding: 18px;
-    }
-    .login-box {
-      width: 100%;
-      max-width: 390px;
-      text-align: center;
-      padding: 24px 20px;
-      border: 1px solid #334155;
-    }
-    .login-input {
-      width: 100%;
-      padding: 12px 14px;
-      margin-bottom: 12px;
-      border-radius: 10px;
-      border: 1px solid #334155;
-      background: #090d16;
-      color: #fff;
-      font-size: 14px;
-      outline: none;
-    }
-    .login-input:focus { border-color: var(--gold); }
-    .primary-btn {
-      width: 100%;
-      padding: 12px;
-      border: none;
-      border-radius: 10px;
-      background: linear-gradient(135deg, #f59e0b, #d97706);
-      color: #000;
-      font-weight: 900;
-      font-size: 14px;
-      cursor: pointer;
-    }
-    .plus-btn {
-      padding: 7px 12px;
-      border: none;
-      border-radius: 8px;
-      background: linear-gradient(135deg, #f59e0b, #d97706);
-      color: #000;
-      font-weight: 900;
-      font-size: 12px;
-      cursor: pointer;
-    }
-    .plus-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-
-    /* Top HUD */
-    .top-hud {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px 14px;
-      background: rgba(9, 13, 22, 0.95);
-      border-bottom: 1px solid #1e293b;
-      position: sticky;
-      top: 0;
-      z-index: 50;
-      gap: 8px;
-    }
-    .hud-pill {
-      background: #1e293b;
-      padding: 4px 9px;
-      border-radius: 8px;
-      font-size: 11px;
-      font-weight: 800;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    /* Arena Stage */
-    .container { max-width: 620px; margin: 0 auto; padding: 12px; }
-    .arena-stage {
-      position: relative;
-      background: linear-gradient(180deg, #1e1b4b 0%, #0f172a 70%, #090d16 100%);
-      border: 1px solid #334155;
-      border-radius: 16px;
-      padding: 14px;
-      margin-bottom: 12px;
-      overflow: hidden;
-    }
-    .arena-fighters {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-      min-height: 175px;
-      padding: 8px 6px;
-      position: relative;
-    }
-    .combatant-box {
-      width: 46%;
-      text-align: center;
-      position: relative;
-    }
-    .sprite-actor {
-      width: 115px;
-      height: 115px;
-      margin: 0 auto;
-      background-repeat: no-repeat;
-      transition: transform 0.16s ease, filter 0.15s ease;
-    }
-    .lunge-right { transform: translateX(36px) scale(1.06); }
-    .lunge-left { transform: translateX(-36px) scale(1.06); }
-    .hit-flash { filter: brightness(2.6) drop-shadow(0 0 12px #ef4444); }
-
-    .hp-track {
-      width: 100%;
-      height: 9px;
-      background: #1e293b;
-      border-radius: 6px;
-      overflow: hidden;
-      margin-top: 6px;
-      border: 1px solid #334155;
-    }
-    .hp-fill { height: 100%; transition: width 0.25s ease; }
-
-    .dmg-popup {
-      position: absolute;
-      top: 12px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-weight: 900;
-      font-size: 18px;
-      text-shadow: 0 2px 6px #000;
-      animation: floatUp 0.75s ease-out forwards;
-      pointer-events: none;
-      z-index: 20;
-    }
-    @keyframes floatUp {
-      0% { opacity: 1; transform: translate(-50%, 0) scale(1.1); }
-      100% { opacity: 0; transform: translate(-50%, -36px) scale(0.95); }
-    }
-
-    /* Gear Slots */
-    .gear-grid {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 6px;
-      margin-top: 10px;
-    }
-    .gear-slot {
-      background: #090d16;
-      border: 1px solid #334155;
-      border-radius: 10px;
-      padding: 7px 4px;
-      text-align: center;
-      cursor: pointer;
-    }
-    .gear-icon { font-size: 20px; }
-    .gear-name { font-size: 9px; font-weight: 800; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .gear-stat { font-size: 9px; color: var(--gold); }
-
-    /* Stat Bars */
-    .stat-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      font-size: 11px;
-      margin-bottom: 6px;
-    }
-    .stat-bar-bg {
-      flex: 1;
-      height: 7px;
-      background: #1e293b;
-      border-radius: 6px;
-      overflow: hidden;
-    }
-    .stat-bar-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #3b82f6, #38bdf8);
-    }
-
-    /* Character Strip */
-    .char-scroll {
-      display: flex;
-      gap: 8px;
-      overflow-x: auto;
-      padding-bottom: 6px;
-    }
-    .char-card {
-      min-width: 82px;
-      max-width: 82px;
-      background: #090d16;
-      border: 1px solid #334155;
-      border-radius: 10px;
-      padding: 6px;
-      text-align: center;
-      cursor: pointer;
-    }
-    .char-card.active {
-      border-color: var(--gold);
-      background: rgba(245, 158, 11, 0.14);
-    }
-    .char-thumb {
-      width: 52px;
-      height: 52px;
-      margin: 0 auto;
-    }
-
-    /* Bottom Dock */
-    .bottom-dock {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: rgba(9, 13, 22, 0.98);
-      border-top: 1px solid #1e293b;
-      display: flex;
-      justify-content: space-around;
-      padding: 8px 4px;
-      z-index: 80;
-    }
-    .dock-btn {
-      background: transparent;
-      border: 1px solid transparent;
-      color: var(--muted);
-      font-size: 11px;
-      font-weight: 800;
-      padding: 6px 8px;
-      border-radius: 10px;
-      cursor: pointer;
-    }
-    .dock-btn.active {
-      color: var(--gold);
-      border-color: rgba(245, 158, 11, 0.45);
-      background: rgba(245, 158, 11, 0.12);
-    }
-
-    /* Modals */
-    .modal-backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(2, 6, 23, 0.94);
-      z-index: 9990;
-      overflow-y: auto;
-      padding: 14px;
-    }
-    .modal-card {
-      max-width: 540px;
-      margin: 0 auto;
-    }
-
-    /* PvP Specific */
-    .pvp-tab-bar { display: flex; gap: 6px; margin-bottom: 10px; }
-    .pvp-tab-btn {
-      flex: 1;
-      padding: 8px;
-      border-radius: 8px;
-      border: 1px solid #334155;
-      background: #0f172a;
-      color: #cbd5e1;
-      font-weight: 800;
-      font-size: 12px;
-      cursor: pointer;
-    }
-    .pvp-tab-btn.active {
-      border-color: var(--gold);
-      background: rgba(245, 158, 11, 0.16);
-      color: var(--gold);
-    }
-    .pvp-challenger-card {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px;
-      margin-bottom: 8px;
-      border-radius: 12px;
-      background: #0f172a;
-      border: 1px solid #1e293b;
-      gap: 8px;
-    }
-    .pvp-fight-btn {
-      background: linear-gradient(135deg, #ef4444, #b91c1c);
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      padding: 7px 12px;
-      font-weight: 900;
-      font-size: 12px;
-      cursor: pointer;
-    }
-    .pvp-won-btn {
-      background: #065f46;
-      color: #6ee7b7;
-      border: 1px solid #10b981;
-      border-radius: 8px;
-      padding: 6px 10px;
-      font-weight: 800;
-      font-size: 11px;
-    }
-    .pvp-skill-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 8px;
-      margin-top: 10px;
-    }
-    .pvp-skill-btn {
-      padding: 10px 8px;
-      border-radius: 10px;
-      border: 1px solid #475569;
-      background: #1e293b;
-      color: #fff;
-      font-weight: 800;
-      font-size: 12px;
-      cursor: pointer;
-    }
-    .pvp-skill-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-    .pvp-side-card {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 5px 8px;
-      border-radius: 8px;
-      border: 1px solid #334155;
-      background: #0f172a;
-      color: #fff;
-      cursor: pointer;
-      flex: 1;
-    }
-    .pvp-side-card.active-unit { border-color: var(--gold); background: rgba(245,158,11,0.16); }
-    .pvp-side-card.fainted-unit { opacity: 0.4; }
-    .pvp-side-face { width: 28px; height: 28px; border-radius: 6px; flex-shrink: 0; }
-    .pvp-side-meta { text-align: left; min-width: 0; flex: 1; }
-    .pvp-side-tag { display: block; font-size: 8px; font-weight: 900; color: var(--gold); }
-    .pvp-side-name { display: block; font-size: 10px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .pvp-side-hp-track { height: 4px; background: #1e293b; border-radius: 4px; margin-top: 2px; overflow: hidden; }
-    .pvp-side-hp-fill { height: 100%; background: #22c55e; }
-
-    #toast {
-      position: fixed;
-      top: 14px;
-      left: 50%;
-      transform: translateX(-50%);
-      padding: 9px 16px;
-      border-radius: 999px;
-      color: #fff;
-      font-weight: 900;
-      font-size: 12px;
-      z-index: 99999;
-      display: none;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.6);
-      white-space: nowrap;
-    }
-  </style>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
   <div id="toast"></div>
 
   <!-- LOGIN SCREEN -->
-  <div id="login-screen">
-    <div class="rpg-card login-box">
-      <div style="font-size:38px; margin-bottom:6px;">⚔️</div>
-      <h2 style="margin:0 0 4px; color:var(--gold);">CLASSQUEST RPG</h2>
-      <p style="margin:0 0 16px; font-size:12px; color:var(--muted);">Enter your Student ID &amp; PIN to enter the Tower</p>
-      <input id="student-id-input" class="login-input" placeholder="Student ID (e.g. 2026-001)" />
-      <input id="student-pin-input" class="login-input" type="password" placeholder="PIN" onkeydown="if(event.key==='Enter') loginStudent()" />
-      <button class="primary-btn" onclick="loginStudent()">🚀 ENTER WORLD</button>
+  <div id="login-screen" class="login-container">
+    <div class="login-box">
+      <div style="font-size:40px; margin-bottom:6px;">⛩️</div>
+      <h2 style="color:var(--gold); margin-bottom:4px; letter-spacing:1px;">CLASSQUEST RPG</h2>
+      <p style="font-size:12px; color:var(--muted); margin-bottom:18px;">Enter your Student ID &amp; PIN to enter the Torii Arena</p>
+      <input id="student-id-input" placeholder="Student ID (e.g. 2026-001)" />
+      <input id="student-pin-input" type="password" placeholder="PIN" onkeydown="if(event.key==='Enter') loginStudent()" />
+      <button class="btn-primary" onclick="loginStudent()">⚔️ ENTER WORLD</button>
     </div>
   </div>
 
-  <!-- MAIN GAME SCREEN -->
-  <div id="game-screen" class="hidden">
+  <!-- MAIN FULL-SCREEN TORII ARCADE WORLD -->
+  <div id="game-screen" class="arcade-world hidden">
 
-    <!-- TOP HUD -->
-    <div class="top-hud">
-      <div>
-        <div style="font-weight:900; font-size:13px;">
-          <span id="hud-name">Hero</span> <span style="color:#38bdf8;">Lv.<span id="hud-level">1</span></span>
+    <!-- TOP ARCADE HUD -->
+    <header class="arcade-top-hud">
+      <!-- LEFT: YOUR HERO HUD -->
+      <div class="fighter-hud left">
+        <div class="portrait-ring">
+          <div id="hud-hero-portrait" class="portrait-sprite"></div>
+          <span class="portrait-lv">Lv.<span id="hud-level">1</span></span>
         </div>
-        <div style="font-size:10px; color:var(--muted);">ID: <span id="hud-id">-</span></div>
-      </div>
-
-      <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
-        <span class="hud-pill" style="color:#fde047;">⭐ <span id="hud-pts">0</span> Pts</span>
-        <span class="hud-pill" style="color:#38bdf8;">⚔️ <span id="hud-cp">0</span> CP</span>
-        <button onclick="openTasksModal()" class="hud-pill" style="border:1px solid #3b82f6; color:#93c5fd; cursor:pointer;">📋 Tasks</button>
-        <button onclick="syncProgress(false)" class="hud-pill" style="border:1px solid #10b981; color:#6ee7b7; cursor:pointer;">☁️ Sync</button>
-        <button id="bgm-toggle-btn" onclick="toggleAnimeBGM()" class="hud-pill" style="border:1px solid #475569; color:#e2e8f0; cursor:pointer;">🔇 BGM: OFF</button>
-      </div>
-    </div>
-
-    <div class="container">
-      <!-- TOWER ARENA STAGE -->
-      <div class="arena-stage">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-          <span style="font-weight:900; font-size:13px; color:#38bdf8;">🏰 TOWER FLOOR <span id="hud-floor">1</span></span>
-          <span id="active-char-badge" style="font-size:10px; font-weight:800; color:var(--gold);">No Hero</span>
-          <button id="pause-idle-btn" onclick="toggleIdlePause()" style="background:#0f172a; border:1px solid #10b981; color:#4ade80; border-radius:8px; padding:3px 8px; font-size:10px; font-weight:800; cursor:pointer;">⏸ PAUSE</button>
-        </div>
-
-        <div class="arena-fighters">
-          <!-- HERO -->
-          <div class="combatant-box" id="combatant-hero">
-            <div style="display:flex; align-items:center; gap:6px; justify-content:center; margin-bottom:4px;">
-              <div id="hud-hero-portrait" style="width:24px; height:24px; border-radius:50%; border:1px solid var(--gold); background-color:#090d16;"></div>
-              <span style="font-size:11px; font-weight:800;">YOUR HERO</span>
-            </div>
-            <div id="arena-hero-sprite" class="sprite-actor"></div>
-            <div class="hp-track"><div id="hero-hp-bar" class="hp-fill" style="width:100%; background:#22c55e;"></div></div>
+        <div class="hud-bars">
+          <div class="hud-title-row">
+            <span id="hud-name" class="fighter-name">Hero</span>
+            <span class="fighter-cp">⚔️ <span id="hud-cp">0</span></span>
           </div>
-
-          <div style="font-weight:900; color:#ef4444; font-size:16px; align-self:center;">VS</div>
-
-          <!-- ENEMY -->
-          <div class="combatant-box" id="combatant-enemy">
-            <div style="display:flex; align-items:center; gap:5px; justify-content:center; margin-bottom:4px;">
-              <div id="hud-enemy-portrait" style="width:24px; height:24px; border-radius:50%; border:1px solid #ef4444; background-color:#090d16;"></div>
-              <span id="arena-enemy-name" style="font-size:11px; font-weight:800; max-width:85px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Enemy</span>
-              <span id="enemy-boss-badge" style="font-size:9px; background:#7f1d1d; color:#fecaca; padding:1px 5px; border-radius:5px; font-weight:900;">F1</span>
-            </div>
-            <div id="arena-enemy-sprite" class="sprite-actor"></div>
-            <div class="hp-track"><div id="enemy-hp-bar" class="hp-fill" style="width:100%; background:#ef4444;"></div></div>
-            <div id="arena-enemy-cp" style="font-size:10px; color:#fca5a5; margin-top:2px; font-weight:700;">250 CP</div>
+          <div class="arcade-hp-track">
+            <div id="hero-hp-bar" class="arcade-hp-fill hero-fill" style="width:100%;"></div>
           </div>
-        </div>
-
-        <div id="raid-result" style="text-align:center; font-size:11px; font-weight:800; margin-top:6px; min-height:18px; color:#cbd5e1;">
-          Battling floor guardians...
+          <div class="hud-sub-row">
+            <span id="active-char-badge" class="rarity-tag">No Hero</span>
+            <span class="id-tag">ID: <span id="hud-id">-</span></span>
+          </div>
         </div>
       </div>
 
-      <!-- DRAWER 1: HERO, STATS & 5-SLOT GEAR -->
-      <div id="drawer-hero" class="rpg-card" style="margin-bottom:12px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-          <span style="font-weight:900; font-size:13px; color:var(--gold);">🛡️ HERO &amp; EQUIPMENT</span>
-          <div style="display:flex; gap:6px;">
-            <button onclick="openCollection()" class="plus-btn" style="font-size:10px;">📖 Codex (<span id="collection-count">0/0</span>)</button>
-            <button onclick="openArmory('all')" class="plus-btn" style="font-size:10px;">🎒 Bag</button>
+      <!-- CENTER: FLOOR HUB -->
+      <div class="center-floor-hub">
+        <div class="floor-diamond">
+          <span class="floor-lbl">FLOOR</span>
+          <span id="hud-floor" class="floor-num">1</span>
+        </div>
+        <div class="hub-pills">
+          <button id="pause-idle-btn" class="hub-pill pill-live" onclick="toggleIdlePause()">⏸ PAUSE</button>
+          <span class="hub-pill pill-vs">VS</span>
+          <button class="hub-pill pill-tasks" onclick="openTasksModal()">📋 Tasks</button>
+        </div>
+      </div>
+
+      <!-- RIGHT: ENEMY HUD & UTILITY STRIP -->
+      <div class="fighter-hud right">
+        <div class="hud-bars">
+          <div class="hud-title-row">
+            <span id="arena-enemy-cp" class="enemy-cp">250 CP</span>
+            <span id="arena-enemy-name" class="fighter-name">Enemy</span>
+          </div>
+          <div class="arcade-hp-track">
+            <div id="enemy-hp-bar" class="arcade-hp-fill enemy-fill" style="width:100%;"></div>
+          </div>
+          <div class="hud-utility-strip">
+            <span class="util-pts">⭐ <span id="hud-pts">0</span> Pts</span>
+            <span>•</span>
+            <button class="util-btn util-sync" onclick="syncProgress(false)">☁️ Sync</button>
+            <span>•</span>
+            <button id="bgm-toggle-btn" class="util-btn" onclick="toggleAnimeBGM()">🔇 BGM: OFF</button>
           </div>
         </div>
+        <div class="portrait-ring enemy-ring">
+          <div id="hud-enemy-portrait" class="portrait-sprite"></div>
+          <span id="enemy-boss-badge" class="portrait-lv enemy-tag">F1</span>
+        </div>
+      </div>
+    </header>
 
-        <!-- Unlocked Heroes Strip -->
-        <div id="unlocked-chars-row" class="char-scroll"></div>
+    <!-- FLOATING COMBAT LOG BANNER -->
+    <div id="raid-result" class="combat-banner">Battling floor guardians...</div>
 
-        <!-- 5 Gear Slots -->
-        <div class="gear-grid">
+    <!-- CENTER TORII FIGHTING STAGE -->
+    <main class="torii-stage">
+      <div id="combatant-hero" class="combatant">
+        <div id="arena-hero-sprite" class="arena-sprite"></div>
+        <div class="neon-ring cyan-ring"></div>
+      </div>
+
+      <div id="combatant-enemy" class="combatant">
+        <div id="arena-enemy-sprite" class="arena-sprite"></div>
+        <div class="neon-ring magenta-ring"></div>
+      </div>
+    </main>
+
+    <!-- BOTTOM 5-TAB ARCADE DOCK -->
+    <nav class="arcade-dock">
+      <button id="dock-arena" class="dock-btn active" onclick="closeAllDrawers(this)">
+        <span class="dock-icon">⛩️</span>
+        <span class="dock-label">ARENA</span>
+      </button>
+      <button class="dock-btn" onclick="openDrawer('drawer-hero', this)">
+        <span class="dock-icon">🛡️</span>
+        <span class="dock-label">HERO</span>
+      </button>
+      <button class="dock-btn" onclick="openDrawer('drawer-gacha', this)">
+        <span class="dock-icon">✨</span>
+        <span class="dock-label">GACHA</span>
+      </button>
+      <button class="dock-btn" onclick="openPvpModal()">
+        <span class="dock-icon">⚔️</span>
+        <span class="dock-label">PVP</span>
+      </button>
+      <button class="dock-btn" onclick="openGuildModal()">
+        <span class="dock-icon">🏯</span>
+        <span class="dock-label">GUILD</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- DRAWER 1: HERO, 5-SLOT GEAR & STATS MODAL -->
+  <div id="drawer-hero" class="modal hidden" onclick="if(event.target===this) closeAllDrawers()">
+    <div class="arcade-panel">
+      <div class="card-title">
+        <span>🛡️ HERO &amp; EQUIPMENT</span>
+        <div style="display:flex; gap:6px;">
+          <button class="plus-btn" style="background:#7e22ce;" onclick="openCollection()">📖 Codex (<span id="collection-count">0/0</span>)</button>
+          <button class="plus-btn" onclick="openArmory('all')">🎒 Bag</button>
+          <button class="plus-btn" style="background:#334155;" onclick="closeAllDrawers()">✕</button>
+        </div>
+      </div>
+
+      <div class="hero-stage">
+        <div class="slot-col">
           <div id="slot-head" class="gear-slot" onclick="openArmory('head')"></div>
-          <div id="slot-weapon" class="gear-slot" onclick="openArmory('weapon')"></div>
           <div id="slot-armor" class="gear-slot" onclick="openArmory('armor')"></div>
           <div id="slot-boots" class="gear-slot" onclick="openArmory('boots')"></div>
+        </div>
+        <div class="hero-center">
+          <div id="hero-modal-sprite" class="sprite-box"></div>
+          <div class="neon-ring cyan-ring" style="width:110px; height:18px; margin-top:-10px;"></div>
+        </div>
+        <div class="slot-col">
+          <div id="slot-weapon" class="gear-slot" onclick="openArmory('weapon')"></div>
           <div id="slot-accessory" class="gear-slot" onclick="openArmory('accessory')"></div>
-        </div>
-
-        <!-- Level & EXP Bar -->
-        <div style="margin-top:12px; padding-top:10px; border-top:1px solid #1e293b;">
-          <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:800; margin-bottom:4px;">
-            <span>Hero Level <span id="panel-level" style="color:var(--gold);">1</span></span>
-            <span style="color:#38bdf8;">EXP: <span id="exp-text">0 / 100</span></span>
-          </div>
-          <div class="stat-bar-bg" style="margin-bottom:10px;">
-            <div id="exp-bar-fill" class="stat-bar-fill" style="width:0%; background:linear-gradient(90deg,#f59e0b,#fde047);"></div>
-          </div>
-          <div id="stat-rows"></div>
+          <button class="gear-slot" style="border-color:var(--gold); color:var(--gold); font-weight:900; font-size:10px;" onclick="openDrawer('drawer-rank')">🏆 RANKS</button>
         </div>
       </div>
 
-      <!-- DRAWER 2: GACHA SUMMON -->
-      <div id="drawer-gacha" class="rpg-card hidden" style="margin-bottom:12px; text-align:center;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-          <span style="font-weight:900; font-size:14px; color:#e879f9;">✨ HERO SUMMON GATE</span>
-          <span style="font-size:12px; font-weight:900; color:var(--gold);">⭐ <span id="gacha-pts-display">0</span> Pts</span>
-        </div>
-        <div id="stage-hero-sprite" style="width:96px; height:96px; margin:6px auto; background-repeat:no-repeat;"></div>
-        <div id="drawer-char-badge" style="font-size:11px; color:#cbd5e1; margin-bottom:8px;">No Hero</div>
+      <div id="unlocked-chars-row" class="char-strip"></div>
 
-        <div style="display:flex; justify-content:center; gap:8px; font-size:10px; color:var(--muted); margin-bottom:10px; flex-wrap:wrap;">
-          <span>Epic Pity: <b id="pity-epic-text" style="color:#c084fc;">0/10</b></span>
-          <span>•</span>
-          <span>Leg Pity: <b id="pity-leg-text" style="color:#fbbf24;">0/25</b></span>
-          <span>•</span>
-          <span>Secret: <b id="pity-sec-text" style="color:#f472b6;">0/50</b></span>
-          <span>•</span>
-          <span>Divine: <b id="pity-div-text" style="color:#fde047;">0/100</b></span>
+      <div class="rpg-card" style="margin-top:10px;">
+        <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:800; margin-bottom:4px;">
+          <span>Hero Level <b id="panel-level" style="color:var(--gold);">1</b></span>
+          <span style="color:var(--cyan);">EXP: <span id="exp-text">0 / 100</span></span>
         </div>
-
-        <div style="display:flex; gap:10px; justify-content:center;">
-          <button id="roll-1-btn" class="plus-btn" style="flex:1; padding:11px;" onclick="rollGacha(1)">🎲 1x Summon (5 Pts)</button>
-          <button id="roll-5-btn" class="plus-btn" style="flex:1; padding:11px; background:linear-gradient(135deg,#a855f7,#ec4899); color:#fff;" onclick="rollGacha(5)">🌟 5x Summon (22 Pts)</button>
+        <div class="stat-bar-bg" style="margin-bottom:10px;">
+          <div id="exp-bar-fill" class="stat-bar-fill" style="width:0%; background:linear-gradient(90deg,#f59e0b,#fde047);"></div>
         </div>
-
-        <div id="gacha-result-log" style="margin-top:10px; font-size:12px; font-weight:800; min-height:20px;"></div>
-      </div>
-
-      <!-- DRAWER 3: LEADERBOARDS -->
-      <div id="drawer-rank" class="rpg-card hidden" style="margin-bottom:12px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-          <span id="main-lb-title" style="font-weight:900; font-size:13px; color:var(--gold);">🏆 CLASS TOWER RANKING</span>
-          <button id="lb-mode-btn" onclick="toggleMainLeaderboardMode()" style="background:#7e22ce; color:#fff; border:none; border-radius:8px; padding:5px 10px; font-size:11px; font-weight:800; cursor:pointer;">🌍 Global PvP Wins</button>
-        </div>
-        <div id="leaderboard-list"></div>
+        <div id="stat-rows"></div>
       </div>
     </div>
+  </div>
 
-    <!-- BOTTOM DOCK -->
-    <div class="bottom-dock">
-      <button id="dock-arena" class="dock-btn active" onclick="closeAllDrawers(this)">🏰 ARENA</button>
-      <button class="dock-btn" onclick="openDrawer('drawer-hero', this)">🛡️ HERO</button>
-      <button class="dock-btn" onclick="openDrawer('drawer-gacha', this)">✨ GACHA</button>
-      <button class="dock-btn" onclick="openPvpModal()">⚔️ PVP</button>
-      <button class="dock-btn" onclick="openGuildModal()">🏯 GUILD</button>
-      <button class="dock-btn" onclick="openDrawer('drawer-rank', this)">🏆 RANK</button>
+  <!-- DRAWER 2: GACHA SUMMON MODAL -->
+  <div id="drawer-gacha" class="modal hidden" onclick="if(event.target===this) closeAllDrawers()">
+    <div class="arcade-panel" style="text-align:center;">
+      <div class="card-title">
+        <span>✨ HERO SUMMON GATE</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="badge" style="color:#fde047;">⭐ <span id="gacha-pts-display">0</span> Pts</span>
+          <button class="plus-btn" style="background:#334155;" onclick="closeAllDrawers()">✕</button>
+        </div>
+      </div>
+
+      <div id="stage-hero-sprite" class="sprite-box" style="margin:4px auto;"></div>
+      <div id="drawer-char-badge" style="font-size:11px; color:#cbd5e1; margin-bottom:8px;">No Hero</div>
+
+      <div class="pity-grid">
+        <span>Epic Pity: <b id="pity-epic-text" style="color:#c084fc;">0/10</b></span>
+        <span>Leg Pity: <b id="pity-leg-text" style="color:#fbbf24;">0/25</b></span>
+        <span>Secret Pity: <b id="pity-sec-text" style="color:#f472b6;">0/50</b></span>
+        <span>Divine Pity: <b id="pity-div-text" style="color:#22d3ee;">0/100</b></span>
+      </div>
+
+      <div class="btn-pair">
+        <button id="roll-1-btn" class="btn-primary" onclick="rollGacha(1)">🎲 1x Summon (5 Pts)</button>
+        <button id="roll-5-btn" class="btn-primary btn-gacha" onclick="rollGacha(5)">🌟 5x Summon (22 Pts)</button>
+      </div>
+
+      <div id="gacha-result-log" style="margin-top:10px; font-size:12px; font-weight:800; min-height:20px;"></div>
+    </div>
+  </div>
+
+  <!-- DRAWER 3: LEADERBOARD MODAL -->
+  <div id="drawer-rank" class="modal hidden" onclick="if(event.target===this) closeAllDrawers()">
+    <div class="arcade-panel">
+      <div class="card-title">
+        <span id="main-lb-title">🏆 CLASS TOWER RANKING</span>
+        <div style="display:flex; gap:6px;">
+          <button id="lb-mode-btn" class="plus-btn" style="background:#7e22ce;" onclick="toggleMainLeaderboardMode()">🌍 Global PvP Wins</button>
+          <button class="plus-btn" style="background:#334155;" onclick="closeAllDrawers()">✕</button>
+        </div>
+      </div>
+      <div id="leaderboard-list"></div>
     </div>
   </div>
 
   <!-- ARMORY MODAL -->
-  <div id="armory-modal" class="modal-backdrop hidden">
-    <div class="rpg-card modal-card">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-        <h3 id="armory-title" style="margin:0; color:var(--gold);">🎒 Armory</h3>
-        <button onclick="closeArmory()" class="plus-btn" style="background:#334155; color:#fff;">✕ Close</button>
+  <div id="armory-modal" class="modal hidden" onclick="if(event.target===this) closeArmory()">
+    <div class="arcade-panel">
+      <div class="card-title">
+        <span id="armory-title">🎒 Armory</span>
+        <button class="plus-btn" style="background:#334155;" onclick="closeArmory()">✕ Close</button>
       </div>
       <div id="armory-items"></div>
     </div>
   </div>
 
-  <!-- HERO CODEX COLLECTION MODAL -->
-  <div id="collection-modal" class="modal-backdrop hidden">
-    <div class="rpg-card modal-card">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-        <h3 style="margin:0; color:var(--gold);">📖 Hero Codex (<span id="modal-collection-count">0/0</span>)</h3>
-        <button onclick="closeCollection()" class="plus-btn" style="background:#334155; color:#fff;">✕ Close</button>
+  <!-- HERO CODEX MODAL -->
+  <div id="collection-modal" class="modal hidden" onclick="if(event.target===this) closeCollection()">
+    <div class="arcade-panel">
+      <div class="card-title">
+        <span>📖 Hero Codex (<span id="modal-collection-count">0/0</span>)</span>
+        <button class="plus-btn" style="background:#334155;" onclick="closeCollection()">✕ Close</button>
       </div>
       <div id="collection-grid" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;"></div>
     </div>
   </div>
 
-  <!-- TASKS & MISSING WORK MODAL -->
-  <div id="tasks-modal" class="modal-backdrop hidden">
-    <div class="rpg-card modal-card">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-        <h3 style="margin:0; color:#60a5fa;">📋 My Class Tasks</h3>
-        <button onclick="closeTasksModal()" class="plus-btn" style="background:#334155; color:#fff;">✕ Close</button>
+  <!-- TASKS MODAL -->
+  <div id="tasks-modal" class="modal hidden" onclick="if(event.target===this) closeTasksModal()">
+    <div class="arcade-panel">
+      <div class="card-title">
+        <span>📋 My Class Tasks</span>
+        <button class="plus-btn" style="background:#334155;" onclick="closeTasksModal()">✕ Close</button>
       </div>
-      <div style="display:flex; justify-content:space-around; background:#090d16; padding:8px; border-radius:10px; margin-bottom:10px; font-size:12px;">
+      <div class="pvp-status-bar">
         <span>Total Earned: <b id="tasks-total-earned" style="color:#4ade80;">0 Pts</b></span>
         <span>Unspent: <b id="tasks-unspent" style="color:var(--gold);">0 Pts</b></span>
       </div>
@@ -591,101 +252,159 @@
     </div>
   </div>
 
-  <!-- 3v3 GLOBAL PVP MODAL -->
-  <div id="pvp-modal" class="modal-backdrop hidden">
-    <div class="rpg-card modal-card">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+  <!-- 3v3 GLOBAL PVP & GUILD WAR ARENA MODAL -->
+  <div id="pvp-modal" class="modal pvp-backdrop hidden">
+    <!-- LOBBY SHELL -->
+    <div id="pvp-lobby-shell" class="pvp-glass-panel">
+      <div class="card-title">
         <div>
-          <h3 style="margin:0; color:#f87171;">⚔️ GLOBAL 3v3 PVP ARENA</h3>
-          <div style="font-size:11px; color:var(--muted);">
-            Rating: <b id="pvp-my-pts" style="color:var(--gold);">1000</b> • Today: <b id="pvp-my-record" style="color:#38bdf8;">0W - 0L</b>
+          <span style="font-size:15px; color:#fda4af;">⚔️ GLOBAL 3v3 PVP ARENA</span>
+          <div style="font-size:11px; color:var(--muted); margin-top:2px;">
+            Rating: <b id="pvp-my-pts" style="color:var(--gold);">1000</b> • Today: <b id="pvp-my-record" style="color:var(--cyan);">0W - 0L</b>
           </div>
         </div>
-        <button onclick="closePvpModal()" class="plus-btn" style="background:#334155; color:#fff;">✕ Close</button>
+        <button class="pvp-exit-btn" onclick="closePvpModal()">✕ Close</button>
       </div>
 
-      <!-- LOBBY SHELL -->
-      <div id="pvp-lobby-shell">
-        <div class="pvp-tab-bar">
-          <button id="pvp-tab-lobby" class="pvp-tab-btn active" onclick="switchPvpTab('lobby')">⚔️ Challengers</button>
-          <button id="pvp-tab-rank" class="pvp-tab-btn" onclick="switchPvpTab('rank')">🏆 Daily Rank</button>
-          <button id="pvp-tab-squad" class="pvp-tab-btn" onclick="switchPvpTab('squad')">🛡️ My 3v3 Squad</button>
+      <div class="pvp-tab-bar">
+        <button id="pvp-tab-lobby" class="pvp-tab active" onclick="switchPvpTab('lobby')">⚔️ Challengers</button>
+        <button id="pvp-tab-rank" class="pvp-tab" onclick="switchPvpTab('rank')">🏆 Daily Rank</button>
+        <button id="pvp-tab-squad" class="pvp-tab" onclick="switchPvpTab('squad')">🛡️ 3v3 Squad</button>
+      </div>
+
+      <div id="pvp-view-lobby"><div id="pvp-global-list" class="pvp-scroll-list"></div></div>
+      <div id="pvp-view-rank" class="hidden"><div id="pvp-wins-leaderboard-list" class="pvp-scroll-list"></div></div>
+
+      <div id="pvp-view-squad" class="hidden">
+        <div style="font-size:11px; color:#cbd5e1; margin-bottom:6px;">Active 3v3 Squad (Tap slot to remove — shared with Guild Wars):</div>
+        <div id="pvp-squad-slots" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-bottom:10px;"></div>
+        <button onclick="savePvpSquad()" class="btn-primary" style="width:100%; margin-bottom:12px;">💾 SAVE 3v3 SQUAD</button>
+        <div style="font-size:11px; color:var(--gold); font-weight:800; margin-bottom:6px;">Your Unlocked Heroes:</div>
+        <div id="pvp-squad-roster" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;"></div>
+      </div>
+    </div>
+
+    <!-- FULL-SCREEN ARCADE 3v3 BATTLE (SHARED BY GLOBAL PVP & WEEKEND GUILD WAR) -->
+    <div id="pvp-view-battle" class="pvp-battle-fullscreen hidden">
+      <div class="pvp-top-utility">
+        <span id="pvp-battle-mode-tag" class="pvp-mode-tag">⚔️ 3v3 GLOBAL PVP</span>
+        <span class="pvp-vs-emblem">VS</span>
+        <button class="pvp-exit-btn" onclick="handleBattleExitClick()">✕ Exit</button>
+      </div>
+
+      <div class="pvp-battle-hud">
+        <div class="pvp-side left">
+          <div class="portrait-ring" style="width:46px; height:46px;">
+            <div id="pvp-my-portrait" class="portrait-sprite"></div>
+          </div>
+          <div class="pvp-bars">
+            <div class="pvp-name-row">
+              <span id="pvp-b-myname" class="pvp-player-title">You</span>
+              <span id="pvp-my-stars" class="pvp-stars">★</span>
+            </div>
+            <div class="arcade-hp-track">
+              <div id="pvp-my-hpbar" class="arcade-hp-fill hero-fill" style="width:100%;"></div>
+              <span class="bar-overlay-txt"><span id="pvp-act-myhp">0/0</span> <span id="pvp-my-shield-tag" style="color:#38bdf8;"></span></span>
+            </div>
+            <div class="energy-row">
+              <span class="en-txt">EN <span id="pvp-act-myen">30</span></span>
+              <div class="energy-track"><div id="pvp-my-enbar" class="energy-fill" style="width:30%;"></div></div>
+            </div>
+          </div>
         </div>
 
-        <div id="pvp-view-lobby"><div id="pvp-global-list"></div></div>
-        <div id="pvp-view-rank" class="hidden"><div id="pvp-wins-leaderboard-list"></div></div>
-
-        <div id="pvp-view-squad" class="hidden">
-          <div style="font-size:11px; color:#cbd5e1; margin-bottom:6px;">Active 3v3 Squad (Tap slot to remove):</div>
-          <div id="pvp-squad-slots" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-bottom:10px;"></div>
-          <button onclick="savePvpSquad()" class="primary-btn" style="margin-bottom:12px;">💾 SAVE 3v3 SQUAD</button>
-          <div style="font-size:11px; color:var(--gold); font-weight:800; margin-bottom:6px;">Your Unlocked Heroes:</div>
-          <div id="pvp-squad-roster" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;"></div>
+        <div class="pvp-side right">
+          <div class="pvp-bars">
+            <div class="pvp-name-row">
+              <span id="pvp-opp-stars" class="pvp-stars">★</span>
+              <span id="pvp-b-oppname" class="pvp-player-title">Opponent</span>
+            </div>
+            <div class="arcade-hp-track">
+              <div id="pvp-opp-hpbar" class="arcade-hp-fill enemy-fill" style="width:100%;"></div>
+              <span class="bar-overlay-txt"><span id="pvp-act-opphp">0/0</span> <span id="pvp-opp-shield-tag" style="color:#38bdf8;"></span></span>
+            </div>
+            <div class="energy-row">
+              <div class="energy-track"><div id="pvp-opp-enbar" class="energy-fill opp-en" style="width:30%;"></div></div>
+              <span class="en-txt">EN <span id="pvp-act-oppen">30</span></span>
+            </div>
+          </div>
+          <div class="portrait-ring enemy-ring" style="width:46px; height:46px;">
+            <div id="pvp-opp-portrait" class="portrait-sprite"></div>
+          </div>
         </div>
       </div>
 
-      <!-- ACTIVE 3v3 PVP BATTLE VIEW -->
-      <div id="pvp-view-battle" class="hidden">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-          <span id="pvp-b-turn" style="padding:3px 10px; border-radius:8px; font-size:11px; font-weight:900;">YOUR TURN</span>
-          <button id="pvp-speed-btn" onclick="togglePvpSpeed()" style="background:#0f172a; border:1px solid #e2e8f0; color:#fff; border-radius:8px; padding:3px 10px; font-size:11px; font-weight:900; cursor:pointer;">1x</button>
+      <div class="turn-banner-wrap">
+        <div id="pvp-b-turn" class="turn-banner">YOUR TURN</div>
+      </div>
+
+      <div class="pvp-arena-stage">
+        <div class="battle-side-controls">
+          <button id="pvp-speed-btn" class="speed-badge" onclick="togglePvpSpeed()">1x</button>
+        </div>
+        <div id="pvp-side-switcher" class="pvp-side-switcher"></div>
+
+        <div id="pvp-comb-my" class="combatant">
+          <div id="pvp-sprite-my" class="arena-sprite"></div>
+          <div class="neon-ring cyan-ring"></div>
         </div>
 
-        <div class="arena-fighters" style="min-height:165px; background:#090d16; border-radius:12px; padding:10px;">
-          <div class="combatant-box" id="pvp-comb-my">
-            <div style="display:flex; align-items:center; justify-content:center; gap:5px;">
-              <div id="pvp-my-portrait" style="width:22px; height:22px; border-radius:50%; border:1px solid var(--gold);"></div>
-              <span id="pvp-b-myname" style="font-size:11px; font-weight:800;">You</span>
-            </div>
-            <div id="pvp-my-stars" style="font-size:9px; color:var(--gold);">★</div>
-            <div id="pvp-sprite-my" class="sprite-actor" style="width:95px; height:95px;"></div>
-            <div class="hp-track"><div id="pvp-my-hpbar" class="hp-fill" style="width:100%; background:#22c55e;"></div></div>
-            <div style="font-size:9px; color:#cbd5e1;"><span id="pvp-act-myhp">0/0</span> <span id="pvp-my-shield-tag" style="color:#38bdf8;"></span></div>
-            <div class="hp-track" style="height:5px;"><div id="pvp-my-enbar" class="hp-fill" style="width:30%; background:#3b82f6;"></div></div>
-            <div style="font-size:9px; color:#93c5fd;">EN: <span id="pvp-act-myen">30</span>/100</div>
-          </div>
+        <div class="pvp-clash-vs">VS</div>
 
-          <div class="combatant-box" id="pvp-comb-opp">
-            <div style="display:flex; align-items:center; justify-content:center; gap:5px;">
-              <div id="pvp-opp-portrait" style="width:22px; height:22px; border-radius:50%; border:1px solid #ef4444;"></div>
-              <span id="pvp-b-oppname" style="font-size:11px; font-weight:800;">Opponent</span>
-            </div>
-            <div id="pvp-opp-stars" style="font-size:9px; color:var(--gold);">★</div>
-            <div id="pvp-sprite-opp" class="sprite-actor" style="width:95px; height:95px;"></div>
-            <div class="hp-track"><div id="pvp-opp-hpbar" class="hp-fill" style="width:100%; background:#ef4444;"></div></div>
-            <div style="font-size:9px; color:#cbd5e1;"><span id="pvp-act-opphp">0/0</span> <span id="pvp-opp-shield-tag" style="color:#38bdf8;"></span></div>
-            <div class="hp-track" style="height:5px;"><div id="pvp-opp-enbar" class="hp-fill" style="width:30%; background:#3b82f6;"></div></div>
-            <div style="font-size:9px; color:#93c5fd;">EN: <span id="pvp-act-oppen">30</span>/100</div>
-          </div>
+        <div id="pvp-comb-opp" class="combatant">
+          <div id="pvp-sprite-opp" class="arena-sprite"></div>
+          <div class="neon-ring magenta-ring"></div>
         </div>
+      </div>
 
-        <div id="pvp-side-switcher" style="display:flex; gap:6px; margin-top:8px;"></div>
-        <div id="pvp-battle-log" style="font-size:11px; text-align:center; margin-top:8px; min-height:20px; color:#fde047;"></div>
+      <div id="pvp-battle-log" class="pvp-log-strip">Choose your skill!</div>
 
-        <div class="pvp-skill-grid">
-          <button id="pvp-sk-0" class="pvp-skill-btn" onclick="usePvpSkill(0)">⚔️ Strike (+15 EN)</button>
-          <button id="pvp-sk-1" class="pvp-skill-btn" onclick="usePvpSkill(1)">💥 Smash (25 EN)</button>
-          <button id="pvp-sk-2" class="pvp-skill-btn" onclick="usePvpSkill(2)">🛡️ Guard &amp; Heal (20 EN)</button>
-          <button id="pvp-sk-3" class="pvp-skill-btn" style="border-color:var(--gold); color:#fde047;" onclick="usePvpSkill(3)">🔥 ULTIMATE (50 EN)</button>
+      <div class="pvp-bottom-deck">
+        <div class="pvp-skill-cards">
+          <button id="pvp-sk-0" class="skill-card sk-strike" onclick="usePvpSkill(0)">
+            <span class="sk-icon">⚔️</span>
+            <span class="sk-info"><b>Strike</b><small>+15 EN</small></span>
+          </button>
+          <button id="pvp-sk-1" class="skill-card sk-smash" onclick="usePvpSkill(1)">
+            <span class="sk-icon">💥</span>
+            <span class="sk-info"><b>Smash</b><small>25 EN • 1.55x</small></span>
+          </button>
+          <button id="pvp-sk-2" class="skill-card sk-guard" onclick="usePvpSkill(2)">
+            <span class="sk-icon">🛡️</span>
+            <span class="sk-info"><b>Guard</b><small>20 EN • Heal+Shield</small></span>
+          </button>
+          <button id="pvp-sk-3" class="skill-card sk-ult" onclick="usePvpSkill(3)">
+            <span class="sk-icon">🔥</span>
+            <span class="sk-info"><b>ULTIMATE</b><small>50 EN • 2.3x</small></span>
+          </button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- WEEKEND GUILD & GUILD WAR MODAL -->
-  <div id="guild-modal" class="modal-backdrop hidden">
-    <div class="rpg-card modal-card">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+  <!-- GUILD HALL & WEEKEND WAR MODAL (WITH COC-STYLE LIVE WAR TIMER) -->
+  <div id="guild-modal" class="modal hidden" onclick="if(event.target===this) closeGuildModal()">
+    <div class="pvp-glass-panel">
+      <div class="card-title">
         <div>
-          <h3 style="margin:0; color:#fbbf24;">🏯 GUILD HALL &amp; WEEKEND WAR</h3>
-          <div id="guild-event-status" style="font-size:11px; color:#94a3b8;">20 Members Max • Approval Required • 1h Leave Cooldown</div>
+          <span style="font-size:15px; color:#fbbf24;">🏯 GUILD HALL &amp; WEEKEND WAR</span>
+          <div id="guild-event-status" style="font-size:11px; color:#94a3b8; margin-top:2px;">⏳ Guild Battles open every Saturday &amp; Sunday • Max 20 Members</div>
         </div>
-        <button onclick="closeGuildModal()" class="plus-btn" style="background:#334155; color:#fff;">✕ Close</button>
+        <button class="pvp-exit-btn" onclick="closeGuildModal()">✕ Close</button>
       </div>
 
-      <div id="guild-cooldown-banner" class="hidden" style="background:rgba(220,38,38,0.2); border:1px solid #ef4444; color:#fca5a5; padding:8px 10px; border-radius:10px; font-size:12px; margin-bottom:10px; text-align:center;"></div>
+      <!-- CLASH OF CLANS STYLE LIVE WAR SCHEDULE & COUNTDOWN BANNER -->
+      <div id="guild-war-timer-bar" class="pvp-status-bar" style="border-color:rgba(245,158,11,0.5); background:rgba(15,23,42,0.9);">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span id="guild-war-phase-badge" style="background:#b45309; color:#fef08a; font-size:10px; font-weight:900; padding:3px 8px; border-radius:6px;">PREPARATION DAY</span>
+          <span id="guild-war-countdown" style="font-weight:900; font-size:13px; color:#fde047; font-variant-numeric:tabular-nums;">--d --h --m --s</span>
+        </div>
+        <span style="font-size:11px; color:#38bdf8; font-weight:800;">500 Base Pts • Steal 25%</span>
+      </div>
 
-      <div id="guild-hub-body">
+      <div id="guild-cooldown-banner" class="hidden" style="background:rgba(220,38,38,0.25); border:1px solid #ef4444; color:#fca5a5; padding:8px 10px; border-radius:10px; font-size:12px; margin-bottom:10px; text-align:center;"></div>
+
+      <div id="guild-hub-body" class="pvp-scroll-list">
         <p style="text-align:center; color:#94a3b8; padding:24px;">Loading Guild Hall...</p>
       </div>
     </div>
