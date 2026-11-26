@@ -1,6 +1,24 @@
 (() => {
   const API_URL = "https://script.google.com/macros/s/AKfycbxPN7yKyqOwyyxIarj2BTkIcuMOomlfc52zCo2vK4AcVWg8TRofqKaRR-kj1yKiLiENWA/exec";
 
+  // --- SAFE JSON POST HELPER (HANDLES NON-JSON / HTML REDIRECTS CLEANLY) ---
+  async function apiPost(payload) {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+    const rawText = await res.text();
+    let json;
+    try {
+      json = JSON.parse(rawText);
+    } catch (_) {
+      throw new Error("Server returned non-JSON response. Verify Web App deployment ('Anyone') and API_URL.");
+    }
+    if (json.status === 'error') throw new Error(json.message);
+    return json;
+  }
+
   // --- DEVTOOLS & CONSOLE DETERRENT SHIELD ---
   document.addEventListener('contextmenu', (e) => e.preventDefault());
   document.addEventListener('keydown', (e) => {
@@ -401,12 +419,7 @@
     startAnimeBGM();
     showToast("Summoning World...", "#e11d48");
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify({ action: 'studentLogin', studentId, pin })
-      });
-      const json = await res.json();
-      if (json.status === 'error') throw new Error(json.message);
+      const json = await apiPost({ action: 'studentLogin', studentId, pin });
 
       hero = json.data;
       sessionToken = json.data.token || '';
@@ -785,17 +798,12 @@
     showToast(isWeekendBoostActive() ? "🍀 Summoning (2x Weekend Luck)..." : "✨ Summoning...", "#9333ea");
 
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'rollGacha',
-          token: sessionToken,
-          studentId: hero.studentId,
-          count: count
-        })
+      const json = await apiPost({
+        action: 'rollGacha',
+        token: sessionToken,
+        studentId: hero.studentId,
+        count: count
       });
-      const json = await res.json();
-      if (json.status === 'error') throw new Error(json.message);
 
       playAnimeSFX('gacha');
       hero.avatar = json.data.avatar;
@@ -1126,7 +1134,6 @@
       Number(hero.stats.int) || 1
     );
 
-    // If stats were manually edited in console/memory, snap back to verified server level
     if (maxStatClaimed !== lv || lv > verifiedServerLevel + 10) {
       hero.stats.level = verifiedServerLevel;
       hero.stats.exp = 0;
@@ -1147,7 +1154,6 @@
     const srvLv = Math.max(1, Number(srvStats.level) || 1);
     const srvExp = Math.max(0, Number(srvStats.exp) || 0);
 
-    // Server is strictly authoritative for level, EXP, and derived stats
     hero.stats.level = srvLv;
     hero.stats.exp = srvExp;
     hero.stats.str = Math.max(1, Number(srvStats.str) || srvLv);
@@ -1157,10 +1163,10 @@
     verifiedServerLevel = srvLv;
   }
 
-  function buildSaveStatePayload() {
+  function buildSaveStatePayloadObj() {
     enforceClientIntegrity();
     const lv = Math.max(1, Number(hero.stats.level) || 1);
-    return JSON.stringify({
+    return {
       action: 'saveStudentState',
       token: sessionToken,
       studentId: hero.studentId,
@@ -1177,7 +1183,7 @@
         towerFloor: Math.max(1, Math.floor(Number(hero.towerFloor) || 1)),
         equipped: hero.equipped
       }
-    });
+    };
   }
 
   function startSafeAutoSyncLoop() {
@@ -1204,12 +1210,7 @@
     if (!silent) showToast("☁️ Syncing Hero...", "#10b981");
 
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        body: buildSaveStatePayload()
-      });
-      const json = await res.json();
-      if (json.status === 'error') throw new Error(json.message);
+      const json = await apiPost(buildSaveStatePayloadObj());
 
       hero.unspentPoints = Number(json.data.unspentPoints) || 0;
       if (json.data.stats) mergeServerStatsMonotonic(json.data.stats);
@@ -1269,7 +1270,7 @@
   function flushSyncOnExit() {
     if (!hero || !hasUnsaved || devToolsOpen) return;
     try {
-      const payload = buildSaveStatePayload();
+      const payload = JSON.stringify(buildSaveStatePayloadObj());
       if (navigator.sendBeacon) {
         navigator.sendBeacon(API_URL, new Blob([payload], { type: 'text/plain;charset=utf-8' }));
         hasUnsaved = false;
@@ -1308,17 +1309,12 @@
     if (!list || !hero) return;
 
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'getLeaderboard',
-          token: sessionToken,
-          studentId: hero.studentId,
-          classId: hero.classId
-        })
+      const json = await apiPost({
+        action: 'getLeaderboard',
+        token: sessionToken,
+        studentId: hero.studentId,
+        classId: hero.classId
       });
-      const json = await res.json();
-      if (json.status === 'error') throw new Error(json.message);
 
       const ranks = json.data || [];
       if (ranks.length === 0) {
@@ -1356,16 +1352,11 @@
     list.innerHTML = '<p style="text-align:center; color:var(--muted); font-size:12px; padding:12px;">Loading Global PvP Standings...</p>';
 
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'getPvpData',
-          token: sessionToken,
-          studentId: hero.studentId
-        })
+      const json = await apiPost({
+        action: 'getPvpData',
+        token: sessionToken,
+        studentId: hero.studentId
       });
-      const json = await res.json();
-      if (json.status === 'error') throw new Error(json.message);
 
       handlePvpServerPayload(json.data);
 
@@ -1421,23 +1412,17 @@
     setInterval(async () => {
       if (!hero) return;
       try {
-        const res = await fetch(API_URL, {
-          method: 'POST',
-          body: JSON.stringify({
-            action: 'getStudentPoints',
-            token: sessionToken,
-            studentId: hero.studentId
-          })
+        const json = await apiPost({
+          action: 'getStudentPoints',
+          token: sessionToken,
+          studentId: hero.studentId
         });
-        const json = await res.json();
-        if (json.status === 'success') {
-          const livePts = Number(json.data.unspentPoints) || 0;
-          if (livePts !== hero.unspentPoints) {
-            hero.unspentPoints = livePts;
-            renderAll();
-            showToast("⭐ New Gacha Points Received!", "#3b82f6");
-            setTimeout(hideToast, 2500);
-          }
+        const livePts = Number(json.data.unspentPoints) || 0;
+        if (livePts !== hero.unspentPoints) {
+          hero.unspentPoints = livePts;
+          renderAll();
+          showToast("⭐ New Gacha Points Received!", "#3b82f6");
+          setTimeout(hideToast, 2500);
         }
       } catch (_) {}
     }, 15000);
@@ -1453,17 +1438,12 @@
     modal.classList.remove('hidden');
 
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'getStudentTasks',
-          token: sessionToken,
-          classId: hero.classId,
-          studentId: hero.studentId
-        })
+      const json = await apiPost({
+        action: 'getStudentTasks',
+        token: sessionToken,
+        classId: hero.classId,
+        studentId: hero.studentId
       });
-      const json = await res.json();
-      if (json.status === 'error') throw new Error(json.message);
 
       const { completed, missing, totalEarned } = json.data;
       document.getElementById('tasks-total-earned').innerText = `${totalEarned} Pts`;
@@ -1630,16 +1610,11 @@
     list.innerHTML = '<p style="text-align:center; color:#cbd5e1; padding:20px;">Loading Global Challengers across all classes...</p>';
 
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'getPvpData',
-          token: sessionToken,
-          studentId: hero.studentId
-        })
+      const json = await apiPost({
+        action: 'getPvpData',
+        token: sessionToken,
+        studentId: hero.studentId
       });
-      const json = await res.json();
-      if (json.status === 'error') throw new Error(json.message);
 
       handlePvpServerPayload(json.data);
       updatePvpHeaderSummary();
@@ -1760,17 +1735,12 @@
     if (draftSquadIds.length === 0) return alert("Pick at least 1 hero for your squad!");
     showToast("💾 Saving 3v3 Squad...", "#10b981");
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'savePvpSquad',
-          token: sessionToken,
-          studentId: hero.studentId,
-          squad: draftSquadIds
-        })
+      const json = await apiPost({
+        action: 'savePvpSquad',
+        token: sessionToken,
+        studentId: hero.studentId,
+        squad: draftSquadIds
       });
-      const json = await res.json();
-      if (json.status === 'error') throw new Error(json.message);
 
       hero.avatar.pvpSquad = json.data.pvpSquad;
       showToast("✅ Squad Saved!", "#10b981");
@@ -1819,6 +1789,26 @@
     }).filter(Boolean);
   }
 
+  function hydrateServerSquad(roster) {
+    const allChars = (hero.assets || []).filter(a => a.type === 'character');
+    return (roster || []).map(sq => {
+      const asset = allChars.find(a => a.assetId === sq.assetId) || FALLBACK_MOB;
+      const cp = Math.max(100, Number(sq.cp) || 250);
+      return {
+        assetId: sq.assetId,
+        name: sq.name,
+        rarity: sq.rarity || 'Common',
+        stars: Number(sq.stars) || 1,
+        asset,
+        cp,
+        maxHp: cp * 4,
+        hp: cp * 4,
+        energy: 30,
+        shield: false
+      };
+    });
+  }
+
   function startPvpBattle(opponentId) {
     const defeatedSet = new Set((hero.avatar.defeatedOpponents || []).map(String));
     if (defeatedSet.has(String(opponentId))) {
@@ -1831,23 +1821,7 @@
     const myTeam = buildMyPvpTeam();
     if (myTeam.length === 0) return alert("You need at least 1 unlocked hero!");
 
-    const allChars = (hero.assets || []).filter(a => a.type === 'character');
-    const oppTeam = opp.squad.map(sq => {
-      const asset = allChars.find(a => a.assetId === sq.assetId) || FALLBACK_MOB;
-      const cp = Math.max(100, Number(sq.cp) || 250);
-      return {
-        assetId: sq.assetId,
-        name: sq.name,
-        rarity: sq.rarity,
-        stars: Number(sq.stars) || 1,
-        asset,
-        cp,
-        maxHp: cp * 4,
-        hp: cp * 4,
-        energy: 30,
-        shield: false
-      };
-    });
+    const oppTeam = hydrateServerSquad(opp.squad);
 
     clearPvpActionTimers();
     pvpBattle = {
@@ -2160,18 +2134,13 @@
       : `<span style="color:#f87171; font-weight:900;">💀 DEFEAT (-6 Net PvP Pts)! Recording Match...</span>`;
 
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'recordPvpResult',
-          token: sessionToken,
-          studentId: hero.studentId,
-          opponentId: pvpBattle.opponentId,
-          won: won
-        })
+      const json = await apiPost({
+        action: 'recordPvpResult',
+        token: sessionToken,
+        studentId: hero.studentId,
+        opponentId: pvpBattle.opponentId,
+        won: won
       });
-      const json = await res.json();
-      if (json.status === 'error') throw new Error(json.message);
 
       hero.avatar.pvpWins = json.data.pvpWins;
       hero.avatar.pvpLosses = json.data.pvpLosses;
@@ -2354,16 +2323,11 @@
     body.innerHTML = '<p style="text-align:center; color:#cbd5e1; padding:20px;">Loading Guilds...</p>';
 
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'getGuildHub',
-          token: sessionToken,
-          studentId: hero.studentId
-        })
+      const json = await apiPost({
+        action: 'getGuildHub',
+        token: sessionToken,
+        studentId: hero.studentId
       });
-      const json = await res.json();
-      if (json.status === 'error') throw new Error(json.message);
 
       guildHubCache = json.data;
       updateGuildWarCountdownDisplay();
@@ -2627,12 +2591,7 @@
 
     showToast("🏯 Founding Guild...", "#f59e0b");
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify({ action: 'createGuild', token: sessionToken, studentId: hero.studentId, name, emblem, motto })
-      });
-      const json = await res.json();
-      if (json.status === 'error') throw new Error(json.message);
+      const json = await apiPost({ action: 'createGuild', token: sessionToken, studentId: hero.studentId, name, emblem, motto });
       guildHubCache = json.data;
       newGuildPhotoDataUrl = '';
       hideToast();
@@ -2646,12 +2605,7 @@
   async function requestJoinGuild(guildId) {
     showToast("📩 Sending Join Request...", "#3b82f6");
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify({ action: 'requestJoinGuild', token: sessionToken, studentId: hero.studentId, guildId })
-      });
-      const json = await res.json();
-      if (json.status === 'error') throw new Error(json.message);
+      const json = await apiPost({ action: 'requestJoinGuild', token: sessionToken, studentId: hero.studentId, guildId });
       guildHubCache = json.data;
       showToast("✅ Request Sent! Awaiting Owner Approval.", "#10b981");
       setTimeout(hideToast, 2200);
@@ -2666,19 +2620,14 @@
     if (!guildHubCache?.myGuild) return;
     showToast(approve ? "✅ Approving Member..." : "Declining...", "#10b981");
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'respondGuildRequest',
-          token: sessionToken,
-          studentId: hero.studentId,
-          guildId: guildHubCache.myGuild.guildId,
-          targetStudentId,
-          approve
-        })
+      const json = await apiPost({
+        action: 'respondGuildRequest',
+        token: sessionToken,
+        studentId: hero.studentId,
+        guildId: guildHubCache.myGuild.guildId,
+        targetStudentId,
+        approve
       });
-      const json = await res.json();
-      if (json.status === 'error') throw new Error(json.message);
       guildHubCache = json.data;
       hideToast();
       renderGuildHub();
@@ -2695,18 +2644,13 @@
     const motto = document.getElementById('edit-guild-motto').value.trim();
     showToast("💾 Updating Guild Profile...", "#10b981");
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'updateGuildProfile',
-          token: sessionToken,
-          studentId: hero.studentId,
-          guildId: guildHubCache.myGuild.guildId,
-          name, emblem, motto
-        })
+      const json = await apiPost({
+        action: 'updateGuildProfile',
+        token: sessionToken,
+        studentId: hero.studentId,
+        guildId: guildHubCache.myGuild.guildId,
+        name, emblem, motto
       });
-      const json = await res.json();
-      if (json.status === 'error') throw new Error(json.message);
       guildHubCache = json.data;
       editGuildPhotoDataUrl = '';
       showToast("✅ Guild Updated!", "#10b981");
@@ -2723,12 +2667,7 @@
     if (!ok) return;
     showToast("🚪 Leaving Guild...", "#dc2626");
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify({ action: 'leaveGuild', token: sessionToken, studentId: hero.studentId })
-      });
-      const json = await res.json();
-      if (json.status === 'error') throw new Error(json.message);
+      const json = await apiPost({ action: 'leaveGuild', token: sessionToken, studentId: hero.studentId });
       guildHubCache = json.data;
       hideToast();
       loadGuildHub();
@@ -2742,16 +2681,171 @@
     if (!guildHubCache?.myGuild) return;
     if (!confirm("Remove this member from your guild?")) return;
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'kickGuildMember',
-          token: sessionToken,
-          studentId: hero.studentId,
-          guildId: guildHubCache.myGuild.guildId,
-          targetStudentId
-        })
+      const json = await apiPost({
+        action: 'kickGuildMember',
+        token: sessionToken,
+        studentId: hero.studentId,
+        guildId: guildHubCache.myGuild.guildId,
+        targetStudentId
       });
-      const json = await res.json();
-      if (json.status === 'error') throw new Error(json.message);
       guildHubCache = json.data;
+      renderGuildHub();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  async function initiateGuildBattle(targetGuildId, targetMemberId) {
+    if (!hero) return;
+    if (hero.avatar.unlockedChars.length === 0) {
+      return alert("Summon at least 1 Hero in the Gacha before fighting in Guild Wars!");
+    }
+
+    showToast("⚔️ Entering Guild War Arena...", "#dc2626");
+    try {
+      const json = await apiPost({
+        action: 'startGuildBattle',
+        token: sessionToken,
+        studentId: hero.studentId,
+        targetGuildId,
+        targetMemberId
+      });
+
+      const match = json.data;
+      const myTeam = hydrateServerSquad(match.myTeam);
+      const oppTeam = hydrateServerSquad(match.oppTeam);
+
+      clearPvpActionTimers();
+      pvpBattle = {
+        mode: 'guild',
+        matchId: match.matchId,
+        opponentId: match.defenderId,
+        opponentName: match.defenderName,
+        oppGuildName: match.oppGuild.name,
+        potentialSteal: match.potentialSteal,
+        potentialLoss: match.potentialLoss,
+        myTeam,
+        oppTeam,
+        myActiveIdx: 0,
+        oppActiveIdx: 0,
+        turn: 'player',
+        myActing: false,
+        oppActing: false,
+        finished: false
+      };
+
+      hideToast();
+      stopGuildWarTimerLoop();
+      document.getElementById('guild-modal').classList.add('hidden');
+      document.getElementById('pvp-modal').classList.remove('hidden');
+      document.getElementById('pvp-lobby-shell').classList.add('hidden');
+      document.getElementById('pvp-view-battle').classList.remove('hidden');
+
+      document.getElementById('pvp-battle-mode-tag').innerText = `🏯 GUILD WAR vs ${match.oppGuild.name}`;
+      document.getElementById('pvp-b-myname').innerText = `${hero.name} [${match.myGuild.name}]`;
+      document.getElementById('pvp-b-oppname').innerText = `${match.defenderName} [${match.oppGuild.name}]`;
+      document.getElementById('pvp-battle-log').innerText = `🏯 Guild War vs ${match.defenderName}! Win: +${match.potentialSteal} Guild Pts | Loss: -${match.potentialLoss} Guild Pts`;
+
+      renderPvpBattleUI();
+    } catch (err) {
+      hideToast();
+      alert("Guild Battle Error: " + err.message);
+    }
+  }
+
+  async function finishGuildWarBattle(won) {
+    if (!pvpBattle || pvpBattle.finished) return;
+    pvpBattle.finished = true;
+    clearPvpActionTimers();
+    renderPvpBattleUI();
+
+    document.getElementById('pvp-battle-log').innerHTML = won
+      ? `<span style="color:#4ade80; font-weight:900;">🏆 GUILD VICTORY! Claiming War Points...</span>`
+      : `<span style="color:#f87171; font-weight:900;">💀 GUILD DEFEAT! Recording War Result...</span>`;
+
+    try {
+      const json = await apiPost({
+        action: 'finishGuildBattle',
+        token: sessionToken,
+        studentId: hero.studentId,
+        matchId: pvpBattle.matchId,
+        won: won
+      });
+
+      if (json.data.hub) guildHubCache = json.data.hub;
+      const ptsDelta = Number(json.data.stolenPoints) || 0;
+      if (json.data.won) {
+        playAnimeSFX('levelup');
+        showToast(`🏆 Guild Victory! Stole +${ptsDelta} Guild War Points!`, "#10b981");
+      } else {
+        showToast(`💀 Guild Defeat! Lost -${ptsDelta} Guild War Points.`, "#dc2626");
+      }
+      setTimeout(hideToast, 2800);
+    } catch (err) {
+      alert("Guild War Record Error: " + err.message);
+    }
+
+    setTimeout(() => {
+      pvpBattle = null;
+      document.getElementById('pvp-modal').classList.add('hidden');
+      openGuildModal();
+    }, 1600);
+  }
+
+  // --- 13. TOAST HELPERS & GLOBAL EXPORTS ---
+  function showToast(msg, bg = '#1e293b') {
+    const t = document.getElementById('toast');
+    if (!t) return;
+    t.innerText = msg;
+    t.style.background = bg;
+    t.classList.remove('hidden');
+  }
+
+  function hideToast() {
+    const t = document.getElementById('toast');
+    if (t) t.classList.add('hidden');
+  }
+
+  Object.assign(window, {
+    loginStudent,
+    toggleAnimeBGM,
+    openDrawer,
+    closeAllDrawers,
+    toggleIdlePause,
+    rollGacha,
+    equipCharacter,
+    openCollection,
+    closeCollection,
+    openArmory,
+    closeArmory,
+    equipGear,
+    syncProgress,
+    toggleMainLeaderboardMode,
+    refreshActiveLeaderboard,
+    openTasksModal,
+    closeTasksModal,
+    openPvpModal,
+    closePvpModal,
+    handleBattleExitClick,
+    switchPvpTab,
+    toggleDraftSquad,
+    savePvpSquad,
+    startPvpBattle,
+    togglePvpSpeed,
+    switchPvpHero,
+    usePvpSkill,
+    openGuildModal,
+    closeGuildModal,
+    renderGuildHub,
+    openGuildTargetPicker,
+    handleNewGuildPhotoSelect,
+    handleEditGuildPhotoSelect,
+    createNewGuild,
+    requestJoinGuild,
+    respondGuildRequest,
+    updateGuildProfile,
+    leaveCurrentGuild,
+    kickGuildMember,
+    initiateGuildBattle
+  });
+})();
