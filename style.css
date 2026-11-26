@@ -441,7 +441,8 @@ body {
   z-index: 2;
 }
 
-#pvp-sprite-opp {
+#pvp-sprite-opp,
+#pvp-opp-portrait {
   transform: scaleX(-1);
 }
 
@@ -1024,10 +1025,17 @@ body {
   position: relative;
 }
 
-/* FLOATING LEFT-SIDE 3v3 SQUAD SWITCHER (TAP PROFILE TO SWAP) */
+/* FLOATING LEFT-SIDE 1x SPEED BUTTON + 3v3 SQUAD SWITCHER */
+.battle-side-controls {
+  position: absolute;
+  left: 14px;
+  top: 10px;
+  z-index: 22;
+}
+
 .pvp-side-switcher {
   position: absolute;
-  left: 12px;
+  left: 62px;
   top: 10px;
   display: flex;
   flex-direction: column;
@@ -1119,13 +1127,6 @@ body {
 .pvp-side-hp-fill {
   height: 100%;
   background: linear-gradient(90deg, #10b981, #34d399);
-}
-
-.battle-side-controls {
-  position: absolute;
-  right: 14px;
-  top: 10px;
-  z-index: 22;
 }
 
 .speed-badge {
@@ -1368,8 +1369,13 @@ body {
     display: none;
   }
 
-  .pvp-side-switcher {
+  .battle-side-controls {
     left: 8px;
+    top: 6px;
+  }
+
+  .pvp-side-switcher {
+    left: 54px;
     top: 6px;
     gap: 5px;
   }
