@@ -4,191 +4,212 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Idle Tower Gacha RPG</title>
-  <link rel="stylesheet" href="style.css?v=4" />
+  <link rel="stylesheet" href="style.css?v=7" />
 </head>
 <body>
 
-  <!-- LOGIN SCREEN -->
+  <!-- LOGIN SCREEN (STUDENT ID + PLAIN-TEXT PIN) -->
   <div id="login-screen" class="login-container">
     <div class="login-box">
-      <div style="font-size:48px; margin-bottom:8px;">⚔️</div>
-      <h1 style="color:var(--gold); font-size:24px; font-weight:900; margin-bottom:6px; letter-spacing:0.5px;">IDLE TOWER GACHA</h1>
-      <p style="color:var(--muted); font-size:13px; margin-bottom:20px;">Enter your Student ID to start your idle tower run</p>
-      <input type="text" id="student-id-input" placeholder="Student ID (e.g., 2026001)" onkeydown="if(event.key==='Enter') loginStudent()" />
+      <div style="font-size:48px; margin-bottom:8px;">⛩️</div>
+      <h1 style="color:var(--gold); font-size:24px; font-weight:900; margin-bottom:6px; letter-spacing:0.6px;">IDLE TOWER GACHA</h1>
+      <p style="color:var(--muted); font-size:12px; margin-bottom:18px;">Enter your Student ID & PIN (First-time login sets your PIN)</p>
+      <input type="text" id="student-id-input" placeholder="Student ID (e.g., 2026001)" onkeydown="if(event.key==='Enter') document.getElementById('student-pin-input').focus()" />
+      <input type="password" id="student-pin-input" maxlength="8" inputmode="numeric" placeholder="PIN (e.g., 1234)" onkeydown="if(event.key==='Enter') loginStudent()" />
       <button class="btn-primary" onclick="loginStudent()">ENTER WORLD</button>
     </div>
   </div>
 
-  <!-- MAIN GAME SCREEN -->
-  <div id="game-screen" class="hidden">
+  <!-- MAIN FULL-SCREEN ARCADE STAGE -->
+  <div id="game-screen" class="arcade-world hidden">
 
-    <!-- TOP HUD -->
-    <header class="top-hud">
-      <div class="hud-left">
-        <span class="hud-name" id="hud-name">Hero</span>
-        <span class="hud-sub">ID: <span id="hud-id">---</span> • Lv.<span id="hud-level">1</span></span>
+    <!-- TOP ARCADE BATTLE HUD -->
+    <header class="arcade-top-hud">
+      <!-- LEFT: HERO PORTRAIT & SLANTED HP BAR -->
+      <div class="fighter-hud left">
+        <div class="portrait-ring hero-ring">
+          <div id="hud-hero-portrait" class="portrait-sprite"></div>
+          <span class="portrait-lv">Lv.<span id="hud-level">1</span></span>
+        </div>
+        <div class="hud-bars">
+          <div class="hud-title-row">
+            <span id="hud-name" class="fighter-name">Hero</span>
+            <span class="fighter-cp">⚔️ <span id="hud-cp">0</span> CP</span>
+          </div>
+          <div class="arcade-hp-track">
+            <div id="hero-hp-bar" class="arcade-hp-fill hero-fill" style="width:100%;"></div>
+          </div>
+          <div class="hud-sub-row">
+            <span id="active-char-badge" class="rarity-tag">No Hero</span>
+            <span class="id-tag">ID: <span id="hud-id">---</span></span>
+          </div>
+        </div>
       </div>
-      <div class="hud-badges">
-        <span class="badge">🏰 F<span id="hud-floor">1</span></span>
-        <span class="badge badge-cp">⚔️ <span id="hud-cp">0</span> CP</span>
-        <span class="badge badge-gold">⭐ <span id="hud-pts">0</span> Pts</span>
-        <button class="badge" style="cursor:pointer; border-color:#f43f5e; color:#fda4af; background:rgba(244,63,94,0.12);" onclick="openPvpModal()">⚔️ 3v3 PvP</button>
-        <button id="bgm-toggle-btn" class="badge" style="cursor:pointer;" onclick="toggleAnimeBGM()">🔇 BGM: OFF</button>
-        <button class="badge" style="cursor:pointer; border-color:#38bdf8; color:#38bdf8;" onclick="openTasksModal()">📋 Tasks</button>
-        <button class="btn-sync" onclick="syncProgress()">☁️ Sync</button>
+
+      <!-- CENTER: FLOOR BADGE & PAUSE / TASKS CONTROLS -->
+      <div class="center-floor-hub">
+        <div class="floor-diamond">
+          <span class="floor-lbl">FLOOR</span>
+          <span id="hud-floor" class="floor-num">1</span>
+        </div>
+        <div class="hub-pills">
+          <button id="pause-idle-btn" class="hub-pill pill-live" onclick="toggleIdlePause()">⏸ PAUSE</button>
+          <span class="hub-pill pill-vs">VS</span>
+          <button class="hub-pill pill-tasks" onclick="openTasksModal()">📋 Tasks</button>
+        </div>
+      </div>
+
+      <!-- RIGHT: ENEMY PORTRAIT, HP BAR & UTILITY STRIP -->
+      <div class="fighter-hud right">
+        <div class="hud-bars">
+          <div class="hud-title-row">
+            <span id="arena-enemy-cp" class="enemy-cp">250 CP</span>
+            <span id="arena-enemy-name" class="fighter-name">Guardian</span>
+          </div>
+          <div class="arcade-hp-track">
+            <div id="enemy-hp-bar" class="arcade-hp-fill enemy-fill" style="width:100%;"></div>
+          </div>
+          <div class="hud-utility-strip">
+            <span class="util-pts">⭐ <b id="hud-pts">0</b> PTS</span>
+            <span>|</span>
+            <button id="bgm-toggle-btn" class="util-btn" onclick="toggleAnimeBGM()">🔇 BGM: OFF</button>
+            <span>|</span>
+            <button class="util-btn util-sync" onclick="syncProgress()">☁️ SYNC</button>
+          </div>
+        </div>
+        <div class="portrait-ring enemy-ring">
+          <div id="hud-enemy-portrait" class="portrait-sprite"></div>
+          <span id="enemy-boss-badge" class="portrait-lv enemy-tag">MOB</span>
+        </div>
       </div>
     </header>
 
-    <!-- MAIN RESPONSIVE GRID -->
-    <main class="game-grid">
+    <!-- FLOATING COMBAT STATUS BANNER -->
+    <div id="raid-result" class="combat-banner">Battling tower guardians...</div>
 
-      <!-- COLUMN 1: IDLE TOWER ARENA & GACHA -->
-      <div class="game-col">
-
-        <!-- IDLE TOWER ARENA -->
-        <section id="sec-arena" class="rpg-card">
-          <div class="card-title">
-            <span id="tower-floor-badge">FLOOR 1</span>
-            <span style="font-size:10px; background:rgba(16,185,129,0.15); color:#34d399; border:1px solid #059669; padding:3px 9px; border-radius:99px;">● AUTO-CLIMBING</span>
-          </div>
-
-          <div class="arena-box">
-            <div class="hp-row">
-              <div class="hp-card">
-                <div class="hp-header">
-                  <span id="arena-hero-name" style="color:#f9fafb;">Hero</span>
-                  <span id="arena-hero-cp" style="color:var(--gold);">0 CP</span>
-                </div>
-                <div class="hp-track"><div id="hero-hp-bar" class="hp-fill hp-hero" style="width:100%;"></div></div>
-              </div>
-
-              <div class="hp-card">
-                <div class="hp-header">
-                  <span id="arena-enemy-name" style="color:#f9fafb;">Enemy</span>
-                  <span id="arena-enemy-cp" style="color:#f87171;">250 CP</span>
-                </div>
-                <div class="hp-track"><div id="enemy-hp-bar" class="hp-fill hp-enemy" style="width:100%;"></div></div>
-              </div>
-            </div>
-
-            <div class="arena-stage">
-              <div class="combatant" id="combatant-hero">
-                <div class="arena-sprite" id="arena-hero-sprite"></div>
-                <div class="pedestal"></div>
-              </div>
-              <div class="combatant" id="combatant-enemy">
-                <div class="arena-sprite" id="arena-enemy-sprite"></div>
-                <div class="pedestal"></div>
-              </div>
-            </div>
-
-            <button id="pause-idle-btn" class="btn-primary" style="background:#1f2937; border:1px solid #374151; width:100%;" onclick="toggleIdlePause()">⏸️ Pause Idle</button>
-          </div>
-
-          <div id="raid-result" style="margin-top:10px; font-size:12px; text-align:center; color:#cbd5e1; min-height:18px;">
-            Battling tower guardians...
-          </div>
-        </section>
-
-        <!-- CHARACTER GACHA BANNER -->
-        <section id="sec-gacha" class="rpg-card">
-          <div class="card-title">
-            <span>🎰 CHARACTER GACHA</span>
-            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-              <span style="color:var(--gold); font-size:12px;">PTS: <span id="gacha-pts-display">0</span></span>
-              <button class="badge" style="cursor:pointer; border-color:#a855f7; color:#e9d5ff;" onclick="openCollection()">📖 Collection (<span id="collection-count">0/0</span>)</button>
-            </div>
-          </div>
-
-          <div id="gacha-pity-bar" class="pity-grid">
-            <span>⚡ Epic+: <b id="pity-epic-text" style="color:#c084fc;">0/10</b></span>
-            <span>🔥 Legendary: <b id="pity-leg-text" style="color:#fbbf24;">0/25</b></span>
-            <span>🩸 Secret: <b id="pity-sec-text" style="color:#fb7185;">0/50</b></span>
-            <span>💠 Divine: <b id="pity-div-text" style="color:#38bdf8;">0/100</b></span>
-          </div>
-
-          <div class="btn-pair">
-            <button id="roll-1-btn" class="btn-primary btn-gacha" onclick="rollGacha(1)">✨ Summon x1 (5 Pts)</button>
-            <button id="roll-5-btn" class="btn-primary" style="background:linear-gradient(90deg, #d97706, #dc2626);" onclick="rollGacha(5)">🔥 Summon x5 (22 Pts)</button>
-          </div>
-
-          <div id="gacha-result-log" style="margin-top:8px; font-size:12px; text-align:center; min-height:18px; font-weight:700;"></div>
-
-          <div class="char-strip" id="unlocked-chars-row"></div>
-        </section>
-
+    <!-- CENTER STAGE FIGHTERS -->
+    <main class="torii-stage">
+      <div class="combatant" id="combatant-hero">
+        <div class="arena-sprite" id="arena-hero-sprite"></div>
+        <div class="neon-ring cyan-ring"></div>
       </div>
-
-      <!-- COLUMN 2: HERO GEAR, STATS & LEADERBOARD -->
-      <div class="game-col">
-
-        <!-- HERO STAGE & 5 GEAR SLOTS -->
-        <section id="sec-hero" class="rpg-card">
-          <div class="card-title">
-            <span>🛡️ HERO EQUIPMENT</span>
-            <button class="plus-btn" onclick="openArmory('all')">🎒 Armory</button>
-          </div>
-
-          <div class="hero-stage">
-            <div class="slot-col">
-              <div class="gear-slot" id="slot-head" onclick="openArmory('head')"></div>
-              <div class="gear-slot" id="slot-weapon" onclick="openArmory('weapon')"></div>
-            </div>
-
-            <div class="hero-center">
-              <div class="sprite-box" id="stage-hero-sprite"></div>
-              <div class="pedestal"></div>
-              <div id="active-char-badge" style="margin-top:8px; font-size:12px; font-weight:800; color:var(--gold); text-align:center; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">No Character</div>
-            </div>
-
-            <div class="slot-col">
-              <div class="gear-slot" id="slot-armor" onclick="openArmory('armor')"></div>
-              <div class="gear-slot" id="slot-boots" onclick="openArmory('boots')"></div>
-              <div class="gear-slot" id="slot-accessory" onclick="openArmory('accessory')"></div>
-            </div>
-          </div>
-        </section>
-
-        <!-- AUTO-LEVELING HERO STATS -->
-        <section id="sec-stats" class="rpg-card">
-          <div class="card-title">
-            <span>⚡ HERO LEVEL <span id="panel-level">1</span> (AUTO-STATS)</span>
-            <span style="font-size:11px; color:#60a5fa;">EXP: <span id="exp-text">0 / 100</span></span>
-          </div>
-          <div class="stat-bar-bg" style="margin-bottom:12px; height:9px;">
-            <div id="exp-bar-fill" class="stat-bar-fill" style="width:0%; background:linear-gradient(90deg, #3b82f6, #38bdf8);"></div>
-          </div>
-          <div id="stat-rows"></div>
-        </section>
-
-        <!-- CLASS TOWER & GLOBAL PVP WINS LEADERBOARD -->
-        <section id="sec-rank" class="rpg-card">
-          <div class="card-title">
-            <span id="main-lb-title">🏆 CLASS TOWER RANKING</span>
-            <div style="display:flex; gap:6px;">
-              <button id="lb-mode-btn" class="plus-btn" style="background:#7e22ce; color:#fff;" onclick="toggleMainLeaderboardMode()">🌍 Global PvP Wins</button>
-              <button class="plus-btn" style="background:#1f2937; color:#f9fafb; border:1px solid #374151;" onclick="refreshActiveLeaderboard()">↻</button>
-            </div>
-          </div>
-          <div id="leaderboard-list" style="max-height:260px; overflow-y:auto;"></div>
-        </section>
-
+      <div class="combatant" id="combatant-enemy">
+        <div class="arena-sprite" id="arena-enemy-sprite"></div>
+        <div class="neon-ring magenta-ring"></div>
       </div>
     </main>
 
-    <!-- BOTTOM MOBILE/TABLET NAVIGATION -->
-    <nav class="bottom-nav">
-      <button class="nav-item active" onclick="focusSection('sec-arena', this)"><span>⚔️</span>Arena</button>
-      <button class="nav-item" onclick="focusSection('sec-gacha', this)"><span>🎰</span>Gacha</button>
-      <button class="nav-item" onclick="focusSection('sec-hero', this)"><span>🛡️</span>Hero</button>
-      <button class="nav-item" onclick="openPvpModal()"><span>🔥</span>3v3 PvP</button>
-      <button class="nav-item" onclick="focusSection('sec-rank', this)"><span>🏆</span>Rank</button>
+    <!-- BOTTOM 5-TAB ARCADE NAVIGATION DOCK -->
+    <nav class="arcade-dock">
+      <button class="dock-btn active" id="dock-arena" onclick="closeAllDrawers(this)">
+        <span class="dock-icon">⚔️</span>
+        <span class="dock-label">ARENA</span>
+      </button>
+      <button class="dock-btn" id="dock-equip" onclick="openDrawer('drawer-hero', this)">
+        <span class="dock-icon">🛡️</span>
+        <span class="dock-label">EQUIPMENT</span>
+      </button>
+      <button class="dock-btn" id="dock-gacha" onclick="openDrawer('drawer-gacha', this)">
+        <span class="dock-icon">✨</span>
+        <span class="dock-label">GACHA</span>
+      </button>
+      <button class="dock-btn" id="dock-rank" onclick="openDrawer('drawer-rank', this)">
+        <span class="dock-icon">👑</span>
+        <span class="dock-label">RANKING</span>
+      </button>
+      <button class="dock-btn" id="dock-pvp" onclick="openPvpModal()">
+        <span class="dock-icon">🔥</span>
+        <span class="dock-label">3V3 PVP</span>
+      </button>
     </nav>
+  </div>
+
+  <!-- DRAWER: EQUIPMENT & STATS -->
+  <div id="drawer-hero" class="modal hidden" onclick="if(event.target===this) closeAllDrawers()">
+    <div class="modal-card arcade-panel" style="max-width:540px;">
+      <div class="card-title">
+        <span>🛡️ HERO EQUIPMENT & AUTO-STATS</span>
+        <div style="display:flex; gap:6px;">
+          <button class="plus-btn" onclick="openArmory('all')">🎒 Armory</button>
+          <button class="plus-btn" style="background:#374151; color:#fff;" onclick="closeAllDrawers()">✕ Close</button>
+        </div>
+      </div>
+
+      <div class="hero-stage" style="margin-bottom:14px;">
+        <div class="slot-col">
+          <div class="gear-slot" id="slot-head" onclick="openArmory('head')"></div>
+          <div class="gear-slot" id="slot-weapon" onclick="openArmory('weapon')"></div>
+        </div>
+        <div class="hero-center">
+          <div class="sprite-box" id="stage-hero-sprite"></div>
+          <div class="neon-ring cyan-ring" style="width:90px; height:18px; margin-top:-6px;"></div>
+          <div id="drawer-char-badge" style="margin-top:8px; font-size:12px; font-weight:800; color:var(--gold); text-align:center;">No Character</div>
+        </div>
+        <div class="slot-col">
+          <div class="gear-slot" id="slot-armor" onclick="openArmory('armor')"></div>
+          <div class="gear-slot" id="slot-boots" onclick="openArmory('boots')"></div>
+          <div class="gear-slot" id="slot-accessory" onclick="openArmory('accessory')"></div>
+        </div>
+      </div>
+
+      <div class="card-title" style="margin-bottom:6px;">
+        <span>⚡ HERO LEVEL <span id="panel-level">1</span></span>
+        <span style="font-size:11px; color:#60a5fa;">EXP: <span id="exp-text">0 / 100</span></span>
+      </div>
+      <div class="stat-bar-bg" style="margin-bottom:12px; height:9px;">
+        <div id="exp-bar-fill" class="stat-bar-fill" style="width:0%; background:linear-gradient(90deg, #3b82f6, #38bdf8);"></div>
+      </div>
+      <div id="stat-rows"></div>
+    </div>
+  </div>
+
+  <!-- DRAWER: CHARACTER GACHA -->
+  <div id="drawer-gacha" class="modal hidden" onclick="if(event.target===this) closeAllDrawers()">
+    <div class="modal-card arcade-panel" style="max-width:560px;">
+      <div class="card-title">
+        <span>🎰 CHARACTER GACHA</span>
+        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+          <span style="color:var(--gold); font-size:12px;">PTS: <span id="gacha-pts-display">0</span></span>
+          <button class="badge" style="cursor:pointer; border-color:#a855f7; color:#e9d5ff;" onclick="openCollection()">📖 Collection (<span id="collection-count">0/0</span>)</button>
+          <button class="plus-btn" style="background:#374151; color:#fff;" onclick="closeAllDrawers()">✕ Close</button>
+        </div>
+      </div>
+
+      <div id="gacha-pity-bar" class="pity-grid">
+        <span>⚡ Epic+: <b id="pity-epic-text" style="color:#c084fc;">0/10</b></span>
+        <span>🔥 Legendary: <b id="pity-leg-text" style="color:#fbbf24;">0/25</b></span>
+        <span>🩸 Secret: <b id="pity-sec-text" style="color:#fb7185;">0/50</b></span>
+        <span>💠 Divine: <b id="pity-div-text" style="color:#38bdf8;">0/100</b></span>
+      </div>
+
+      <div class="btn-pair">
+        <button id="roll-1-btn" class="btn-primary btn-gacha" onclick="rollGacha(1)">✨ Summon x1 (5 Pts)</button>
+        <button id="roll-5-btn" class="btn-primary" style="background:linear-gradient(90deg, #d97706, #dc2626);" onclick="rollGacha(5)">🔥 Summon x5 (22 Pts)</button>
+      </div>
+
+      <div id="gacha-result-log" style="margin-top:8px; font-size:12px; text-align:center; min-height:18px; font-weight:700;"></div>
+      <div class="char-strip" id="unlocked-chars-row"></div>
+    </div>
+  </div>
+
+  <!-- DRAWER: CLASS & GLOBAL LEADERBOARD -->
+  <div id="drawer-rank" class="modal hidden" onclick="if(event.target===this) closeAllDrawers()">
+    <div class="modal-card arcade-panel" style="max-width:540px;">
+      <div class="card-title">
+        <span id="main-lb-title">🏆 CLASS TOWER RANKING</span>
+        <div style="display:flex; gap:6px;">
+          <button id="lb-mode-btn" class="plus-btn" style="background:#7e22ce; color:#fff;" onclick="toggleMainLeaderboardMode()">🌍 Global PvP Wins</button>
+          <button class="plus-btn" style="background:#1f2937; color:#f9fafb; border:1px solid #374151;" onclick="refreshActiveLeaderboard()">↻</button>
+          <button class="plus-btn" style="background:#374151; color:#fff;" onclick="closeAllDrawers()">✕ Close</button>
+        </div>
+      </div>
+      <div id="leaderboard-list" style="max-height:360px; overflow-y:auto;"></div>
+    </div>
   </div>
 
   <!-- ARMORY MODAL -->
   <div id="armory-modal" class="modal hidden" onclick="if(event.target===this) closeArmory()">
-    <div class="modal-card">
+    <div class="modal-card arcade-panel">
       <div class="card-title">
         <span id="armory-title">🎒 Armory</span>
         <button class="plus-btn" style="background:#374151; color:#fff;" onclick="closeArmory()">✕ Close</button>
@@ -199,7 +220,7 @@
 
   <!-- CHARACTER COLLECTION MODAL -->
   <div id="collection-modal" class="modal hidden" onclick="if(event.target===this) closeCollection()">
-    <div class="modal-card" style="max-width:540px;">
+    <div class="modal-card arcade-panel" style="max-width:560px;">
       <div class="card-title">
         <span>📖 HERO COLLECTION (<span id="modal-collection-count">0/0</span>)</span>
         <button class="plus-btn" style="background:#374151; color:#fff;" onclick="closeCollection()">✕ Close</button>
@@ -210,12 +231,12 @@
 
   <!-- STUDENT TASKS & MISSING WORK MODAL -->
   <div id="tasks-modal" class="modal hidden" onclick="if(event.target===this) closeTasksModal()">
-    <div class="modal-card">
+    <div class="modal-card arcade-panel">
       <div class="card-title">
         <span>📋 CLASS TASKS & POINTS</span>
         <button class="plus-btn" style="background:#374151; color:#fff;" onclick="closeTasksModal()">✕ Close</button>
       </div>
-      <div style="display:flex; justify-content:space-between; background:#090d16; border:1px solid #1e293b; border-radius:10px; padding:10px 12px; margin-bottom:12px; font-size:12px;">
+      <div style="display:flex; justify-content:space-between; background:rgba(9,13,22,0.85); border:1px solid #334155; border-radius:10px; padding:10px 12px; margin-bottom:12px; font-size:12px;">
         <span>Total Earned: <b id="tasks-total-earned" style="color:#4ade80;">0 Pts</b></span>
         <span>Available Points: <b id="tasks-unspent" style="color:var(--gold);">0 Pts</b></span>
       </div>
@@ -223,126 +244,181 @@
     </div>
   </div>
 
-  <!-- 3v3 TACTICAL PVP & GLOBAL LEADERBOARD MODAL -->
-  <div id="pvp-modal" class="modal hidden" onclick="if(event.target===this) closePvpModal()">
-    <div class="modal-card" style="max-width:620px; max-height:90vh; overflow-y:auto;">
+  <!-- 3v3 GLOBAL PVP LOBBY & FULL-SCREEN ARCADE BATTLE MODAL -->
+  <div id="pvp-modal" class="modal pvp-backdrop hidden" onclick="if(event.target===this) closePvpModal()">
+
+    <!-- LOBBY / LEADERBOARD / SQUAD CONTAINER -->
+    <div id="pvp-lobby-shell" class="modal-card pvp-glass-panel">
       <div class="card-title">
-        <span>⚔️ 3v3 GLOBAL PVP ARENA</span>
-        <button class="plus-btn" style="background:#374151; color:#fff;" onclick="closePvpModal()">✕ Close</button>
+        <span style="font-size:15px; letter-spacing:0.6px;">⚔️ 3v3 GLOBAL PVP ARENA</span>
+        <button class="plus-btn" style="background:#1e293b; border:1px solid #475569; color:#fff;" onclick="closePvpModal()">✕ Close</button>
       </div>
 
-      <!-- TAB BAR -->
-      <div id="pvp-tabs" style="display:flex; gap:6px; margin-bottom:12px;">
-        <button id="pvp-tab-lobby" class="btn-primary" style="flex:1; padding:8px; font-size:11px;" onclick="switchPvpTab('lobby')">⚔️ Challengers</button>
-        <button id="pvp-tab-rank" class="btn-primary" style="flex:1; padding:8px; font-size:11px; background:#1f2937;" onclick="switchPvpTab('rank')">🏆 Win Leaderboard</button>
-        <button id="pvp-tab-squad" class="btn-primary" style="flex:1; padding:8px; font-size:11px; background:#1f2937;" onclick="switchPvpTab('squad')">🛡️ My Squad</button>
+      <!-- 3 ARCADE TABS -->
+      <div id="pvp-tabs" class="pvp-tab-bar">
+        <button id="pvp-tab-lobby" class="pvp-tab active" onclick="switchPvpTab('lobby')">⚔️ Challengers</button>
+        <button id="pvp-tab-rank" class="pvp-tab" onclick="switchPvpTab('rank')">🏆 Win Leaderboard</button>
+        <button id="pvp-tab-squad" class="pvp-tab" onclick="switchPvpTab('squad')">🛡️ My Squad</button>
       </div>
 
       <!-- LOBBY VIEW -->
       <div id="pvp-view-lobby">
-        <div style="display:flex; justify-content:space-between; align-items:center; background:#090d16; border:1px solid #1e293b; border-radius:10px; padding:10px 12px; margin-bottom:10px; font-size:12px;">
+        <div class="pvp-status-bar">
           <span>Rating: <b id="pvp-my-pts" style="color:var(--gold);">1000</b></span>
           <span>Record: <b id="pvp-my-record" style="color:#38bdf8;">0W - 0L</b></span>
-          <button class="plus-btn" style="background:#1f2937; color:#fff; border:1px solid #374151;" onclick="loadPvpLobby()">↻ Refresh</button>
+          <button class="pvp-refresh-btn" onclick="loadPvpLobby()">↻ Refresh</button>
         </div>
-        <div id="pvp-global-list"></div>
+        <div id="pvp-global-list" class="pvp-scroll-list"></div>
       </div>
 
       <!-- DEDICATED GLOBAL PVP WINS LEADERBOARD VIEW -->
       <div id="pvp-view-rank" class="hidden">
-        <div style="background:#090d16; border:1px solid #1e293b; border-radius:10px; padding:8px 12px; margin-bottom:10px; font-size:11px; color:var(--muted); text-align:center;">
+        <div style="background:rgba(9,13,22,0.75); border:1px solid #334155; border-radius:10px; padding:8px 12px; margin-bottom:10px; font-size:11px; color:#cbd5e1; text-align:center;">
           🌍 Cross-Class Global Ranking — Sorted by <b>Total PvP Wins</b>
         </div>
-        <div id="pvp-wins-leaderboard-list" style="max-height:360px; overflow-y:auto;"></div>
+        <div id="pvp-wins-leaderboard-list" class="pvp-scroll-list"></div>
       </div>
 
       <!-- SQUAD BUILDER VIEW -->
       <div id="pvp-view-squad" class="hidden">
-        <p style="font-size:12px; color:var(--muted); margin-bottom:10px;">Pick up to <b>3 Heroes</b> for your tactical 3v3 team, then click Save Squad.</p>
+        <p style="font-size:12px; color:#cbd5e1; margin-bottom:10px;">Pick up to <b>3 Heroes</b> for your tactical 3v3 team, then click Save Squad.</p>
         <div id="pvp-squad-slots" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-bottom:12px;"></div>
-        <button class="btn-primary" style="width:100%; margin-bottom:12px; background:#059669;" onclick="savePvpSquad()">💾 SAVE 3v3 SQUAD</button>
+        <button class="btn-primary" style="width:100%; margin-bottom:12px; background:linear-gradient(90deg, #059669, #10b981);" onclick="savePvpSquad()">💾 SAVE 3v3 SQUAD</button>
         <div id="pvp-squad-roster" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(92px, 1fr)); gap:8px;"></div>
       </div>
+    </div>
 
-      <!-- ACTIVE 3v3 MISCRITS-STYLE BATTLE VIEW -->
-      <div id="pvp-view-battle" class="hidden">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-size:12px; font-weight:800;">
-          <span id="pvp-b-myname" style="color:#38bdf8;">You</span>
-          <span id="pvp-b-turn" style="background:rgba(245,158,11,0.18); color:var(--gold); padding:3px 10px; border-radius:99px;">YOUR TURN</span>
-          <span id="pvp-b-oppname" style="color:#f87171;">Opponent</span>
-        </div>
+    <!-- FULL-SCREEN ARCADE 3v3 BATTLE VIEW -->
+    <div id="pvp-view-battle" class="pvp-battle-fullscreen hidden">
 
-        <!-- TEAM BENCH DOTS -->
-        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-          <div id="pvp-my-bench" style="display:flex; gap:6px;"></div>
-          <div id="pvp-opp-bench" style="display:flex; gap:6px;"></div>
-        </div>
-
-        <!-- BATTLEFIELD -->
-        <div class="arena-box" style="margin-bottom:10px;">
-          <div class="hp-row">
-            <div class="hp-card">
-              <div class="hp-header">
-                <span id="pvp-act-myname" style="color:#f9fafb;">Hero</span>
-                <span id="pvp-act-myhp" style="color:#4ade80;">100/100</span>
-              </div>
-              <div class="hp-track"><div id="pvp-my-hpbar" class="hp-fill hp-hero" style="width:100%;"></div></div>
-              <div style="font-size:10px; color:#38bdf8; margin-top:4px; font-weight:800;">⚡ Energy: <span id="pvp-act-myen">30</span>/100 <span id="pvp-my-shield-tag"></span></div>
-            </div>
-
-            <div class="hp-card">
-              <div class="hp-header">
-                <span id="pvp-act-oppname" style="color:#f9fafb;">Enemy</span>
-                <span id="pvp-act-opphp" style="color:#f87171;">100/100</span>
-              </div>
-              <div class="hp-track"><div id="pvp-opp-hpbar" class="hp-fill hp-enemy" style="width:100%;"></div></div>
-              <div style="font-size:10px; color:#f472b6; margin-top:4px; font-weight:800;">⚡ Energy: <span id="pvp-act-oppen">30</span>/100 <span id="pvp-opp-shield-tag"></span></div>
-            </div>
+      <!-- TOP DUAL FIGHTER HUD -->
+      <div class="pvp-battle-hud">
+        <!-- PLAYER HUD -->
+        <div class="pvp-side left">
+          <div class="portrait-ring hero-ring">
+            <div id="pvp-my-portrait" class="portrait-sprite"></div>
           </div>
-
-          <div class="arena-stage">
-            <div class="combatant" id="pvp-comb-my">
-              <div class="arena-sprite" id="pvp-sprite-my"></div>
-              <div class="pedestal"></div>
+          <div class="pvp-bars">
+            <div class="pvp-name-row">
+              <span id="pvp-b-myname" class="pvp-player-title">You (3v3)</span>
+              <span id="pvp-my-stars" class="pvp-stars">★★★</span>
             </div>
-            <div class="combatant" id="pvp-comb-opp">
-              <div class="arena-sprite" id="pvp-sprite-opp"></div>
-              <div class="pedestal"></div>
+            <div class="arcade-hp-track">
+              <div id="pvp-my-hpbar" class="arcade-hp-fill hero-fill" style="width:100%;"></div>
+              <span id="pvp-act-myhp" class="bar-overlay-txt">100/100</span>
             </div>
+            <div class="energy-row">
+              <span>Energy: <b id="pvp-act-myen">30</b>/100</span>
+              <div class="energy-track"><div id="pvp-my-enbar" class="energy-fill" style="width:30%;"></div></div>
+              <span id="pvp-my-shield-tag" style="color:#34d399;"></span>
+            </div>
+            <div id="pvp-my-bench" class="squad-pills"></div>
           </div>
         </div>
 
-        <!-- COMBAT LOG -->
-        <div id="pvp-battle-log" style="background:#090d16; border:1px solid #1e293b; border-radius:10px; padding:8px 10px; font-size:12px; color:#e2e8f0; min-height:38px; margin-bottom:10px; text-align:center;">
-          Choose a tactical skill below!
+        <!-- CENTER VS SHIELD -->
+        <div class="pvp-vs-emblem">
+          <span>VS</span>
         </div>
 
-        <!-- 4 INTERACTIVE SKILLS -->
-        <div id="pvp-skills-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
-          <button id="pvp-sk-0" class="btn-primary" style="padding:10px; font-size:12px; background:#1e293b; border:1px solid #334155;" onclick="usePvpSkill(0)">
-            ⚔️ Strike (+15 EN)<br><span style="font-size:10px; color:var(--muted);">1.0x ATK • Free</span>
-          </button>
-          <button id="pvp-sk-1" class="btn-primary" style="padding:10px; font-size:12px; background:#7c2d12; border:1px solid #ea580c;" onclick="usePvpSkill(1)">
-            💥 Heavy Smash (25 EN)<br><span style="font-size:10px; color:#fed7aa;">1.55x Burst Damage</span>
-          </button>
-          <button id="pvp-sk-2" class="btn-primary" style="padding:10px; font-size:12px; background:#064e3b; border:1px solid #10b981;" onclick="usePvpSkill(2)">
-            🛡️ Guard & Heal (20 EN)<br><span style="font-size:10px; color:#a7f3d0;">50% Shield + 18% Heal</span>
-          </button>
-          <button id="pvp-sk-3" class="btn-primary" style="padding:10px; font-size:12px; background:linear-gradient(90deg, #7e22ce, #be185d);" onclick="usePvpSkill(3)">
-            ⚡ Ultimate (50 EN)<br><span style="font-size:10px; color:#fbcfe8;">2.3x Signature Finisher</span>
-          </button>
+        <!-- OPPONENT HUD -->
+        <div class="pvp-side right">
+          <div class="pvp-bars">
+            <div class="pvp-name-row">
+              <span id="pvp-opp-stars" class="pvp-stars">★★★</span>
+              <span id="pvp-b-oppname" class="pvp-player-title">Opponent</span>
+              <button class="pvp-exit-btn" onclick="closePvpModal()">✕ Close</button>
+            </div>
+            <div class="arcade-hp-track">
+              <div id="pvp-opp-hpbar" class="arcade-hp-fill hero-fill" style="width:100%;"></div>
+              <span id="pvp-act-opphp" class="bar-overlay-txt">100/100</span>
+            </div>
+            <div class="energy-row">
+              <span id="pvp-opp-shield-tag" style="color:#34d399;"></span>
+              <div class="energy-track"><div id="pvp-opp-enbar" class="energy-fill opp-en" style="width:30%;"></div></div>
+              <span>Energy: <b id="pvp-act-oppen">30</b>/100</span>
+            </div>
+            <div id="pvp-opp-bench" class="squad-pills right-align"></div>
+          </div>
+          <div class="portrait-ring enemy-ring">
+            <div id="pvp-opp-portrait" class="portrait-sprite"></div>
+          </div>
         </div>
-
-        <!-- SWITCH HERO BENCH BUTTONS -->
-        <div style="font-size:11px; color:var(--muted); font-weight:800; margin-bottom:6px;">🔄 SWITCH ACTIVE HERO (Uses Turn):</div>
-        <div id="pvp-switch-row" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px;"></div>
       </div>
+
+      <!-- YOUR TURN BANNER -->
+      <div class="turn-banner-wrap">
+        <div id="pvp-b-turn" class="turn-banner">YOUR TURN</div>
+      </div>
+
+      <!-- LEFT SIDE SPEED TOGGLE -->
+      <div class="battle-side-controls">
+        <button id="pvp-speed-btn" class="speed-badge" onclick="togglePvpSpeed()">1x</button>
+      </div>
+
+      <!-- CENTER BATTLE STAGE -->
+      <div class="pvp-arena-stage">
+        <div class="combatant" id="pvp-comb-my">
+          <div class="arena-sprite" id="pvp-sprite-my"></div>
+          <div class="neon-ring cyan-ring"></div>
+        </div>
+        <div class="pvp-clash-vs">VS</div>
+        <div class="combatant" id="pvp-comb-opp">
+          <div class="arena-sprite" id="pvp-sprite-opp"></div>
+          <div class="neon-ring cyan-ring"></div>
+        </div>
+      </div>
+
+      <!-- COMBAT LOG STRIP -->
+      <div id="pvp-battle-log" class="pvp-log-strip">
+        ⚔️ Choose your skill!
+      </div>
+
+      <!-- BOTTOM ARCADE ACTION BAR -->
+      <div class="pvp-bottom-deck">
+        <div class="pvp-switch-panel">
+          <div class="switch-label">SWITCH ACTIVE HERO (Uses Turn):</div>
+          <div id="pvp-switch-row" class="switch-btn-grid"></div>
+        </div>
+
+        <div id="pvp-skills-grid" class="pvp-skill-cards">
+          <button id="pvp-sk-0" class="skill-card sk-strike" onclick="usePvpSkill(0)">
+            <span class="sk-icon">⚔️</span>
+            <div class="sk-info">
+              <b>Strike (+15 EN)</b>
+              <small>1.0x ATK • Free</small>
+            </div>
+          </button>
+          <button id="pvp-sk-1" class="skill-card sk-smash" onclick="usePvpSkill(1)">
+            <span class="sk-icon">💥</span>
+            <div class="sk-info">
+              <b>Heavy Smash (25 EN)</b>
+              <small>1.55x Burst Damage</small>
+            </div>
+          </button>
+          <button id="pvp-sk-2" class="skill-card sk-guard" onclick="usePvpSkill(2)">
+            <span class="sk-icon">🛡️</span>
+            <div class="sk-info">
+              <b>Guard & Heal (20 EN)</b>
+              <small>50% Shield + 18% Heal</small>
+            </div>
+          </button>
+          <button id="pvp-sk-3" class="skill-card sk-ult" onclick="usePvpSkill(3)">
+            <span class="sk-icon">⚡</span>
+            <div class="sk-info">
+              <b>Ultimate (50 EN)</b>
+              <small>2.3x Signature Finisher</small>
+            </div>
+          </button>
+        </div>
+      </div>
+
     </div>
   </div>
 
   <!-- TOAST NOTIFICATION -->
   <div id="toast"></div>
 
-  <script src="student.js?v=10"></script>
+  <script src="student.js?v=12"></script>
 </body>
 </html>
