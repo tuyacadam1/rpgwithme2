@@ -505,7 +505,7 @@
       .filter(u => u && validAssetIds.has(String(u.id)) && !seen.has(String(u.id)))
       .map(u => {
         seen.add(String(u.id));
-        const stars = Math.max(1, Math.min(MAX_ALLOWED_STARS, Math.floor(Number(u.stars) || 1)));
+        const stars = Math.max(1, Math.floor(Number(u.stars) || 1));
         return { id: String(u.id), stars };
       });
 
