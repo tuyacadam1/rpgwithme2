@@ -1070,7 +1070,7 @@
     });
 
     const unlockedEntry = hero.avatar.unlockedChars.find(u => u.id === charObj.assetId);
-    const stars = unlockedEntry ? Math.max(1, Math.min(MAX_ALLOWED_STARS, Number(unlockedEntry.stars) || 1)) : 1;
+    const stars = unlockedEntry ? Math.max(1, Number(unlockedEntry.stars) || 1) : 1;
     const mult = (RARITY_MULT[charObj.rarity] || 1.0) + ((stars - 1) * 0.1);
 
     return Math.floor(base * mult);
