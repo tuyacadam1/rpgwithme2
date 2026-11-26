@@ -126,29 +126,33 @@ body {
 /* --- FULL-SCREEN TORII GATE ARCADE WORLD --- */
 .arcade-world {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   background:
-    linear-gradient(180deg, rgba(10, 6, 20, 0.72) 0%, rgba(10, 6, 20, 0.12) 32%, rgba(10, 6, 20, 0.18) 72%, rgba(8, 5, 16, 0.88) 100%),
+    linear-gradient(180deg, rgba(10, 6, 20, 0.76) 0%, rgba(10, 6, 20, 0.12) 32%, rgba(10, 6, 20, 0.18) 72%, rgba(8, 5, 16, 0.9) 100%),
     url('./torii-bg.jpg') center 68% / cover no-repeat fixed;
   position: relative;
 }
 
-/* --- TOP ARCADE HUD --- */
+/* --- TOP ARCADE HUD (PC / DESKTOP DEFAULT) --- */
 .arcade-top-hud {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 10px;
-  padding: 12px 16px 6px;
+  gap: 16px;
+  max-width: 1320px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 14px 24px 6px;
   z-index: 20;
 }
 
 .fighter-hud {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
 }
 
@@ -158,8 +162,8 @@ body {
 }
 
 .portrait-ring {
-  width: 62px;
-  height: 62px;
+  width: 68px;
+  height: 68px;
   border-radius: 50%;
   background: radial-gradient(circle, #1e1b4b, #090d16);
   border: 3px solid #f43f5e;
@@ -177,8 +181,8 @@ body {
 }
 
 .portrait-sprite {
-  width: 50px;
-  height: 50px;
+  width: 54px;
+  height: 54px;
   border-radius: 50%;
   background-repeat: no-repeat;
   image-rendering: pixelated;
@@ -194,6 +198,7 @@ body {
   font-weight: 900;
   padding: 1px 7px;
   border-radius: 99px;
+  white-space: nowrap;
 }
 
 .enemy-tag {
@@ -204,7 +209,7 @@ body {
 
 .hud-bars {
   flex: 1;
-  max-width: 310px;
+  max-width: 360px;
   min-width: 0;
 }
 
@@ -212,13 +217,13 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 6px;
+  gap: 8px;
   margin-bottom: 4px;
 }
 
 .fighter-name {
   font-weight: 900;
-  font-size: 14px;
+  font-size: 15px;
   color: #fff;
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
   white-space: nowrap;
@@ -228,7 +233,7 @@ body {
 
 .fighter-cp {
   font-weight: 900;
-  font-size: 13px;
+  font-size: 14px;
   color: #fde047;
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
   flex-shrink: 0;
@@ -236,7 +241,7 @@ body {
 
 .enemy-cp {
   font-weight: 900;
-  font-size: 13px;
+  font-size: 14px;
   color: #fb7185;
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
   flex-shrink: 0;
@@ -244,7 +249,7 @@ body {
 
 .arcade-hp-track {
   width: 100%;
-  height: 12px;
+  height: 13px;
   background: rgba(9, 13, 22, 0.88);
   border: 1.5px solid rgba(255, 255, 255, 0.35);
   border-radius: 6px;
@@ -272,10 +277,14 @@ body {
   align-items: center;
   gap: 6px;
   margin-top: 4px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   color: #e2e8f0;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
+}
+
+.hud-sub-row {
+  justify-content: space-between;
 }
 
 .hud-utility-strip {
@@ -286,6 +295,14 @@ body {
 .rarity-tag {
   color: #fde047;
   text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.id-tag {
+  flex-shrink: 0;
+  color: #cbd5e1;
 }
 
 .util-pts {
@@ -296,7 +313,7 @@ body {
   background: none;
   border: none;
   color: #e2e8f0;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   cursor: pointer;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
@@ -319,7 +336,7 @@ body {
   border: 2px solid #f43f5e;
   box-shadow: 0 0 18px rgba(244, 63, 94, 0.7);
   border-radius: 14px;
-  padding: 5px 18px;
+  padding: 6px 22px;
   text-align: center;
 }
 
@@ -332,7 +349,7 @@ body {
 }
 
 .floor-num {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 900;
   line-height: 1.05;
   color: #fff;
@@ -345,14 +362,15 @@ body {
 }
 
 .hub-pill {
-  background: rgba(15, 23, 42, 0.85);
+  background: rgba(15, 23, 42, 0.88);
   border: 1px solid #475569;
   color: #fff;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
-  padding: 3px 8px;
+  padding: 4px 10px;
   border-radius: 99px;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .pill-live {
@@ -366,6 +384,7 @@ body {
   color: #fb7185;
   font-weight: 900;
   cursor: default;
+  padding: 0 2px;
 }
 
 .pill-tasks {
@@ -375,12 +394,12 @@ body {
 
 /* FLOATING COMBAT BANNER */
 .combat-banner {
-  margin: 4px auto 0;
-  background: rgba(15, 10, 28, 0.82);
+  margin: 6px auto 0;
+  background: rgba(15, 10, 28, 0.84);
   border: 1px solid rgba(244, 63, 94, 0.45);
-  padding: 5px 18px;
+  padding: 6px 20px;
   border-radius: 99px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: #f8fafc;
   text-align: center;
@@ -388,14 +407,17 @@ body {
   z-index: 15;
 }
 
-/* --- CENTER TORII FIGHTING STAGE --- */
+/* --- CENTER TORII FIGHTING STAGE (SCALES LARGE ON PC, CLEAN ON MOBILE) --- */
 .torii-stage {
   flex: 1;
   display: flex;
   justify-content: space-around;
   align-items: flex-end;
-  padding: 20px 6% 36px;
-  min-height: 280px;
+  max-width: 1180px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 20px 6% 42px;
+  min-height: 300px;
   position: relative;
 }
 
@@ -407,8 +429,8 @@ body {
 }
 
 .arena-sprite {
-  width: 124px;
-  height: 124px;
+  width: clamp(138px, 21vw, 256px);
+  height: clamp(138px, 21vw, 256px);
   background-repeat: no-repeat;
   image-rendering: pixelated;
   transition: transform 0.18s ease, filter 0.12s ease;
@@ -420,9 +442,9 @@ body {
 }
 
 .neon-ring {
-  width: 118px;
-  height: 22px;
-  margin-top: -10px;
+  width: clamp(128px, 19vw, 230px);
+  height: clamp(22px, 3.2vw, 38px);
+  margin-top: clamp(-18px, -1.5vw, -10px);
   border-radius: 50%;
   z-index: 1;
 }
@@ -486,17 +508,17 @@ body {
   letter-spacing: 0.5px;
 }
 
-/* --- COMBAT ANIMATIONS --- */
+/* --- COMBAT ANIMATIONS (PROPORTIONAL TO SCREEN WIDTH) --- */
 .lunge-right {
-  transform: translateX(42px) scale(1.08) !important;
+  transform: translateX(clamp(42px, 7vw, 115px)) scale(1.08) !important;
 }
 
 .lunge-left {
-  transform: translateX(-42px) scale(1.08) !important;
+  transform: translateX(calc(-1 * clamp(42px, 7vw, 115px))) scale(1.08) !important;
 }
 
 #pvp-sprite-opp.lunge-left {
-  transform: translateX(-42px) scaleX(-1) scale(1.08) !important;
+  transform: translateX(calc(-1 * clamp(42px, 7vw, 115px))) scaleX(-1) scale(1.08) !important;
 }
 
 .hit-flash {
@@ -507,7 +529,7 @@ body {
   position: absolute;
   top: -16px;
   font-weight: 900;
-  font-size: 18px;
+  font-size: clamp(18px, 2.2vw, 26px);
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.95);
   pointer-events: none;
   animation: floatUp 0.75s ease-out forwards;
@@ -651,8 +673,8 @@ body {
 }
 
 .sprite-box {
-  width: 104px;
-  height: 104px;
+  width: 124px;
+  height: 124px;
   background-repeat: no-repeat;
   image-rendering: pixelated;
   z-index: 2;
@@ -800,11 +822,12 @@ body {
 .pvp-battle-fullscreen {
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   background:
-    linear-gradient(180deg, rgba(10, 6, 20, 0.55) 0%, rgba(10, 6, 20, 0.08) 35%, rgba(10, 6, 20, 0.15) 70%, rgba(8, 5, 16, 0.9) 100%),
+    linear-gradient(180deg, rgba(10, 6, 20, 0.6) 0%, rgba(10, 6, 20, 0.08) 35%, rgba(10, 6, 20, 0.15) 70%, rgba(8, 5, 16, 0.92) 100%),
     url('./torii-bg.jpg') center 68% / cover no-repeat;
   position: relative;
   overflow: hidden;
@@ -814,8 +837,11 @@ body {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: start;
-  gap: 8px;
-  padding: 10px 14px 4px;
+  gap: 12px;
+  max-width: 1320px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 12px 20px 4px;
   z-index: 20;
 }
 
@@ -832,7 +858,7 @@ body {
 
 .pvp-bars {
   flex: 1;
-  max-width: 340px;
+  max-width: 360px;
   min-width: 0;
 }
 
@@ -846,7 +872,7 @@ body {
 
 .pvp-player-title {
   font-weight: 900;
-  font-size: 13px;
+  font-size: 14px;
   color: #fff;
   text-shadow: 0 2px 5px #000;
   white-space: nowrap;
@@ -858,10 +884,11 @@ body {
   color: #facc15;
   font-size: 11px;
   text-shadow: 0 1px 4px #000;
+  flex-shrink: 0;
 }
 
 .pvp-exit-btn {
-  background: rgba(15, 23, 42, 0.85);
+  background: rgba(15, 23, 42, 0.88);
   border: 1px solid #64748b;
   color: #fff;
   font-size: 11px;
@@ -869,6 +896,7 @@ body {
   padding: 2px 8px;
   border-radius: 8px;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .bar-overlay-txt {
@@ -951,7 +979,7 @@ body {
   border: 2px solid #fef08a;
   color: #1e1b4b;
   font-weight: 900;
-  font-size: 16px;
+  font-size: 15px;
   letter-spacing: 1px;
   padding: 4px 26px;
   border-radius: 12px;
@@ -983,12 +1011,15 @@ body {
   display: flex;
   justify-content: space-around;
   align-items: flex-end;
+  max-width: 1180px;
+  width: 100%;
+  margin: 0 auto;
   padding: 10px 8% 18px;
   position: relative;
 }
 
 .pvp-clash-vs {
-  font-size: 46px;
+  font-size: clamp(32px, 4.5vw, 56px);
   font-weight: 900;
   font-style: italic;
   color: #fff;
@@ -1021,12 +1052,6 @@ body {
   z-index: 25;
 }
 
-@media (max-width: 820px) {
-  .pvp-bottom-deck {
-    grid-template-columns: 1fr;
-  }
-}
-
 .switch-label {
   font-size: 10px;
   font-weight: 900;
@@ -1044,12 +1069,6 @@ body {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 8px;
-}
-
-@media (max-width: 640px) {
-  .pvp-skill-cards {
-    grid-template-columns: repeat(2, 1fr);
-  }
 }
 
 .skill-card {
@@ -1091,4 +1110,209 @@ body {
   z-index: 250;
   display: none;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+}
+
+/* ==========================================================================
+   MOBILE & TABLET RESPONSIVE CLEANUP (FIXES CRAMPED TOP HUD ON PHONES)
+   ========================================================================== */
+@media (max-width: 820px) {
+  .pvp-bottom-deck {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 8px 10px 10px;
+  }
+}
+
+@media (max-width: 767px) {
+  /* 2-Row Mobile Top HUD: Row 1 = Floor & Pills | Row 2 = Hero vs Enemy Cards */
+  .arcade-top-hud {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "center center"
+      "left right";
+    gap: 8px 8px;
+    padding: 8px 10px 4px;
+  }
+
+  .center-floor-hub {
+    grid-area: center;
+    flex-direction: row;
+    justify-content: space-between;
+    background: rgba(12, 9, 26, 0.82);
+    border: 1px solid rgba(244, 63, 94, 0.45);
+    border-radius: 12px;
+    padding: 5px 10px;
+  }
+
+  .floor-diamond {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 3px 12px;
+    border-radius: 10px;
+  }
+
+  .floor-num {
+    font-size: 17px;
+  }
+
+  .fighter-hud.left {
+    grid-area: left;
+    background: rgba(12, 16, 32, 0.78);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: 12px;
+    padding: 6px 7px;
+    gap: 7px;
+  }
+
+  .fighter-hud.right {
+    grid-area: right;
+    background: rgba(24, 12, 28, 0.78);
+    border: 1px solid rgba(244, 63, 94, 0.35);
+    border-radius: 12px;
+    padding: 6px 7px;
+    gap: 7px;
+  }
+
+  .portrait-ring {
+    width: 44px;
+    height: 44px;
+    border-width: 2px;
+  }
+
+  .portrait-sprite {
+    width: 36px;
+    height: 36px;
+  }
+
+  .portrait-lv {
+    font-size: 8px;
+    padding: 0 5px;
+    bottom: -5px;
+  }
+
+  .hud-title-row {
+    gap: 4px;
+    margin-bottom: 3px;
+  }
+
+  .fighter-name {
+    font-size: 11px;
+  }
+
+  .fighter-cp,
+  .enemy-cp {
+    font-size: 10px;
+  }
+
+  .arcade-hp-track {
+    height: 9px;
+  }
+
+  .hud-sub-row,
+  .hud-utility-strip {
+    font-size: 9px;
+    gap: 4px;
+    margin-top: 3px;
+  }
+
+  .id-tag {
+    display: none;
+  }
+
+  .util-btn {
+    font-size: 9px;
+  }
+
+  .combat-banner {
+    font-size: 11px;
+    padding: 4px 12px;
+    margin-top: 4px;
+  }
+
+  .torii-stage {
+    min-height: 220px;
+    padding: 12px 4% 24px;
+  }
+
+  .dock-btn {
+    padding: 7px 2px;
+    border-radius: 11px;
+  }
+
+  .dock-icon {
+    font-size: 16px;
+  }
+
+  .dock-label {
+    font-size: 9px;
+    letter-spacing: 0.2px;
+  }
+
+  /* 3v3 PvP Mobile Battle HUD Cleanup */
+  .pvp-battle-hud {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "vs vs"
+      "p1 p2";
+    gap: 6px 8px;
+    padding: 8px 10px 2px;
+  }
+
+  .pvp-vs-emblem {
+    grid-area: vs;
+    width: auto;
+    height: 28px;
+    padding: 0 18px;
+    border-radius: 99px;
+    font-size: 13px;
+    margin: 0 auto;
+  }
+
+  .pvp-side.left {
+    grid-area: p1;
+    background: rgba(12, 16, 32, 0.78);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: 10px;
+    padding: 5px 6px;
+    gap: 6px;
+  }
+
+  .pvp-side.right {
+    grid-area: p2;
+    background: rgba(24, 12, 28, 0.78);
+    border: 1px solid rgba(244, 63, 94, 0.35);
+    border-radius: 10px;
+    padding: 5px 6px;
+    gap: 6px;
+  }
+
+  .pvp-player-title {
+    font-size: 11px;
+  }
+
+  .pvp-stars {
+    display: none;
+  }
+
+  .pvp-skill-cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .skill-card {
+    padding: 7px 8px;
+  }
+
+  .sk-icon {
+    font-size: 18px;
+  }
+
+  .sk-info b {
+    font-size: 11px;
+  }
+
+  .sk-info small {
+    font-size: 9px;
+  }
 }
