@@ -58,6 +58,7 @@
   let draftSquadIds = [];
   let pvpBattle = null; // Shared by 'pvp' and 'guild' 3v3 battles
   let pvpSpeedMult = 1;
+  const pvpActionTimers = { my: null, opp: null };
   let guildHubCache = null;
   let guildWarTimerInterval = null;
   let newGuildPhotoDataUrl = '';
@@ -65,6 +66,27 @@
 
   const RARITY_MULT = { Common: 1.0, Rare: 1.2, Epic: 1.5, Legendary: 2.0, Secret: 2.6, Divine: 3.5 };
   const RARITY_ORDER = { Divine: 1, Secret: 2, Legendary: 3, Epic: 4, Rare: 5, Common: 6 };
+
+  // --- ANTI-TIE PVP NET SCORE HELPER (+10 per Win, -6 per Loss) ---
+  function getPvpNetScore(wins, losses) {
+    const w = Number(wins) || 0;
+    const l = Number(losses) || 0;
+    return (w * 10) - (l * 6);
+  }
+
+  function sortPvpPlayersAntiTie(list) {
+    return (list || []).slice().sort((a, b) => {
+      const netA = getPvpNetScore(a.wins, a.losses);
+      const netB = getPvpNetScore(b.wins, b.losses);
+      if (netB !== netA) return netB - netA;
+      const ptsA = Number(a.pvpPoints) || 1000;
+      const ptsB = Number(b.pvpPoints) || 1000;
+      if (ptsB !== ptsA) return ptsB - ptsA;
+      const wDiff = (Number(b.wins) || 0) - (Number(a.wins) || 0);
+      if (wDiff !== 0) return wDiff;
+      return (Number(b.teamCP) || 0) - (Number(a.teamCP) || 0);
+    });
+  }
 
   function isWeekendBoostActive() {
     if (hero && typeof hero.weekendBoost === 'boolean') return hero.weekendBoost;
@@ -1232,12 +1254,12 @@
     const titleEl = document.getElementById('main-lb-title');
     const btnEl = document.getElementById('lb-mode-btn');
     if (mainLbMode === 'pvp') {
-      titleEl.innerText = '🌍 GLOBAL PVP WINS';
+      titleEl.innerText = '🌍 GLOBAL PVP RANKING';
       btnEl.innerText = '🏰 Class Tower';
       btnEl.style.background = '#0284c7';
     } else {
       titleEl.innerText = '🏆 CLASS TOWER RANKING';
-      btnEl.innerText = '🌍 Global PvP Wins';
+      btnEl.innerText = '🌍 Global PvP';
       btnEl.style.background = '#7e22ce';
     }
     refreshActiveLeaderboard();
@@ -1298,7 +1320,7 @@
   async function loadGlobalPvpWinsLeaderboard(targetElementId = 'pvp-wins-leaderboard-list') {
     const list = document.getElementById(targetElementId);
     if (!list || !hero) return;
-    list.innerHTML = '<p style="text-align:center; color:var(--muted); font-size:12px; padding:12px;">Loading Global PvP Wins...</p>';
+    list.innerHTML = '<p style="text-align:center; color:var(--muted); font-size:12px; padding:12px;">Loading Global PvP Standings...</p>';
 
     try {
       const res = await fetch(API_URL, {
@@ -1314,21 +1336,28 @@
 
       handlePvpServerPayload(json.data);
 
-      const sortedByWins = pvpPlayersCache.slice().sort(
-        (a, b) => (b.wins - a.wins) || (b.pvpPoints - a.pvpPoints) || (b.teamCP - a.teamCP)
-      );
+      const sortedByNetScore = sortPvpPlayersAntiTie(pvpPlayersCache);
 
-      if (sortedByWins.length === 0) {
+      if (sortedByNetScore.length === 0) {
         list.innerHTML = '<p style="text-align:center; color:var(--muted); font-size:12px; padding:12px;">No PvP matches recorded yet.</p>';
         return;
       }
 
-      list.innerHTML = sortedByWins.map((p, idx) => {
+      const legendBanner = `
+        <div class="pvp-status-bar" style="justify-content:center; text-align:center; border-color:rgba(56,189,248,0.45); color:#bae6fd; font-size:11px;">
+          ⚖️ <b>Anti-Tie Scoring:</b> <span style="color:#4ade80;">+10 Net Pts / Win</span> • <span style="color:#f87171;">-6 Net Pts / Loss</span>
+        </div>
+      `;
+
+      list.innerHTML = legendBanner + sortedByNetScore.map((p, idx) => {
         const medal = idx === 0 ? '👑' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
         const isMe = String(p.studentId) === String(hero.studentId);
         const totalMatches = (p.wins || 0) + (p.losses || 0);
         const winRate = totalMatches > 0 ? Math.round((p.wins / totalMatches) * 100) : 0;
         const dailyPrize = idx === 0 ? '100' : idx === 1 ? '90' : idx === 2 ? '75' : '50';
+        const netScore = getPvpNetScore(p.wins, p.losses);
+        const netSign = netScore >= 0 ? `+${netScore}` : `${netScore}`;
+        const netColor = netScore >= 0 ? '#4ade80' : '#f87171';
 
         return `
           <div class="pvp-challenger-card" style="${isMe ? 'border-color:var(--gold); background:rgba(245,158,11,0.18);' : ''}">
@@ -1339,12 +1368,12 @@
                   ${p.name} <span style="color:#38bdf8; font-size:11px;">[${p.className}]</span>
                 </div>
                 <div style="font-size:11px; color:#cbd5e1;">
-                  ${p.wins}W - ${p.losses}L (${winRate}% WR) • ${p.teamCP.toLocaleString()} CP
+                  <b style="color:#4ade80;">${p.wins}W</b> - <b style="color:#f87171;">${p.losses}L</b> (${winRate}% WR) • ⭐ ${p.pvpPoints} Rating • ${p.teamCP.toLocaleString()} CP
                 </div>
               </div>
             </div>
             <div style="text-align:right; flex-shrink:0;">
-              <div style="font-weight:900; font-size:13px; color:#4ade80;">${p.wins} WINS</div>
+              <div style="font-weight:900; font-size:13px; color:${netColor};">${netSign} NET PTS</div>
               <div style="font-size:10px; color:var(--gold);">🎁 +${dailyPrize} Gacha Pts</div>
             </div>
           </div>
@@ -1451,7 +1480,7 @@
   // --- 11. 3v3 GLOBAL PVP & GUILD WAR SHARED BATTLE ENGINE ---
   function handlePvpServerPayload(data) {
     if (!data) return;
-    pvpPlayersCache = data.leaderboard || [];
+    pvpPlayersCache = sortPvpPlayersAntiTie(data.leaderboard || []);
     if (Array.isArray(data.defeatedOpponents)) {
       hero.avatar.defeatedOpponents = data.defeatedOpponents.map(String);
     }
@@ -1480,11 +1509,21 @@
     }
   }
 
+  function clearPvpActionTimers() {
+    ['my', 'opp'].forEach(side => {
+      if (pvpActionTimers[side]) {
+        clearInterval(pvpActionTimers[side]);
+        pvpActionTimers[side] = null;
+      }
+    });
+  }
+
   function openPvpModal() {
     if (!hero) return;
     if (hero.avatar.unlockedChars.length === 0) {
       return alert("Summon at least 1 Hero in the Gacha before entering 3v3 PvP!");
     }
+    clearPvpActionTimers();
     pvpBattle = null;
     document.getElementById('pvp-modal').classList.remove('hidden');
     document.getElementById('pvp-lobby-shell').classList.remove('hidden');
@@ -1494,10 +1533,11 @@
   }
 
   function closePvpModal() {
-    if (pvpBattle && pvpBattle.mode === 'guild' && !pvpBattle.finished) {
+    if (pvpBattle && !pvpBattle.finished) {
       handleBattleExitClick();
       return;
     }
+    clearPvpActionTimers();
     pvpBattle = null;
     document.getElementById('pvp-modal').classList.add('hidden');
     closeAllDrawers();
@@ -1514,6 +1554,13 @@
       finishGuildWarBattle(false);
       return;
     }
+    if (pvpBattle.mode === 'pvp' && !pvpBattle.finished) {
+      const ok = confirm("⚠️ Leaving an active 3v3 PvP match counts as a LOSS (-6 Net PvP Pts & rating penalty)! Retreat?");
+      if (!ok) return;
+      finishPvpBattle(false);
+      return;
+    }
+    clearPvpActionTimers();
     pvpBattle = null;
     switchPvpTab('lobby');
   }
@@ -1537,10 +1584,16 @@
     }
   }
 
+  function updatePvpHeaderSummary() {
+    const myNet = getPvpNetScore(hero.avatar.pvpWins, hero.avatar.pvpLosses);
+    const netText = myNet >= 0 ? `+${myNet}` : `${myNet}`;
+    document.getElementById('pvp-my-pts').innerText = `${hero.avatar.pvpPoints || 1000} (${netText} Net)`;
+    document.getElementById('pvp-my-record').innerText = `${hero.avatar.pvpWins || 0}W - ${hero.avatar.pvpLosses || 0}L`;
+  }
+
   async function loadPvpLobby() {
     const list = document.getElementById('pvp-global-list');
-    document.getElementById('pvp-my-pts').innerText = hero.avatar.pvpPoints || 1000;
-    document.getElementById('pvp-my-record').innerText = `${hero.avatar.pvpWins || 0}W - ${hero.avatar.pvpLosses || 0}L`;
+    updatePvpHeaderSummary();
     list.innerHTML = '<p style="text-align:center; color:#cbd5e1; padding:20px;">Loading Global Challengers across all classes...</p>';
 
     try {
@@ -1556,16 +1609,15 @@
       if (json.status === 'error') throw new Error(json.message);
 
       handlePvpServerPayload(json.data);
-      document.getElementById('pvp-my-pts').innerText = hero.avatar.pvpPoints || 1000;
-      document.getElementById('pvp-my-record').innerText = `${hero.avatar.pvpWins || 0}W - ${hero.avatar.pvpLosses || 0}L`;
+      updatePvpHeaderSummary();
 
       const defeatedSet = new Set((hero.avatar.defeatedOpponents || []).map(String));
 
       const rewardBannerHtml = `
         <div class="pvp-status-bar" style="justify-content:center; text-align:center; border-color:rgba(245,158,11,0.45); color:#fde68a; font-size:11px;">
           <div>
-            ⏰ <b>Daily Midnight Reset Payout (Gacha Points):</b><br>
-            👑 1st: <b>+100 Pts</b> • 🥈 2nd: <b>+90 Pts</b> • 🥉 3rd: <b>+75 Pts</b> • Others: <b>+50 Pts</b>
+            ⚖️ <b>Anti-Tie PvP Rules:</b> <span style="color:#4ade80;">Win = +10 Net Pts</span> • <span style="color:#f87171;">Loss = -6 Net Pts</span><br>
+            ⏰ <b>Midnight Payout:</b> 👑 1st: <b>+100</b> • 🥈 2nd: <b>+90</b> • 🥉 3rd: <b>+75</b> • Others: <b>+50 Gacha Pts</b>
           </div>
         </div>
       `;
@@ -1579,6 +1631,10 @@
         const medal = idx === 0 ? '👑' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
         const isMe = String(p.studentId) === String(hero.studentId);
         const isDefeated = defeatedSet.has(String(p.studentId));
+        const netScore = getPvpNetScore(p.wins, p.losses);
+        const netSign = netScore >= 0 ? `+${netScore}` : `${netScore}`;
+        const netColor = netScore >= 0 ? '#38bdf8' : '#f87171';
+
         const squadThumbs = p.squad.map(sq => {
           const asset = (hero.assets || []).find(a => a.assetId === sq.assetId);
           return asset ? `<div style="width:30px; height:30px; border-radius:6px; border:1px solid #475569; background-color:#090d16; ${getThumbSpriteStyle(asset)}" title="${sq.name}"></div>` : '';
@@ -1602,7 +1658,7 @@
                   ${p.name} <span style="font-size:11px; color:#38bdf8;">[${p.className}]</span>
                 </div>
                 <div style="font-size:11px; color:#e2e8f0; margin-bottom:5px;">
-                  <b style="color:#4ade80;">${p.wins}W</b>-<b style="color:#f87171;">${p.losses}L</b> • ⭐ ${p.pvpPoints} Pts • ${p.teamCP.toLocaleString()} CP
+                  <b style="color:#4ade80;">${p.wins}W</b>-<b style="color:#f87171;">${p.losses}L</b> • <b style="color:${netColor};">${netSign} Net</b> • ⭐ ${p.pvpPoints} • ${p.teamCP.toLocaleString()} CP
                 </div>
                 <div style="display:flex; gap:5px;">${squadThumbs}</div>
               </div>
@@ -1759,6 +1815,7 @@
       };
     });
 
+    clearPvpActionTimers();
     pvpBattle = {
       mode: 'pvp',
       opponentId: opp.studentId,
@@ -1779,7 +1836,7 @@
 
     document.getElementById('pvp-b-myname').innerText = hero.name;
     document.getElementById('pvp-b-oppname').innerText = `${opp.name} [${opp.className}]`;
-    document.getElementById('pvp-battle-log').innerText = `⚔️ 3v3 Battle started vs ${opp.name}! Choose your skill!`;
+    document.getElementById('pvp-battle-log').innerText = `⚔️ 3v3 Battle vs ${opp.name}! Win: +10 Net Pts | Loss: -6 Net Pts`;
 
     renderPvpBattleUI();
   }
@@ -1852,24 +1909,40 @@
     const unit = isMy ? pvpBattle.myTeam[pvpBattle.myActiveIdx] : pvpBattle.oppTeam[pvpBattle.oppActiveIdx];
     const spriteEl = document.getElementById(isMy ? 'pvp-sprite-my' : 'pvp-sprite-opp');
     const cols = Math.max(1, unit.asset?.meta?.cols || 6);
-    const frameInterval = Math.floor(125 / pvpSpeedMult);
+    const frameInterval = Math.max(85, Math.floor(155 / pvpSpeedMult));
+
+    // Clear any leftover interval on this side so animations never collide
+    if (pvpActionTimers[side]) {
+      clearInterval(pvpActionTimers[side]);
+      pvpActionTimers[side] = null;
+    }
 
     if (isMy) pvpBattle.myActing = true;
     else pvpBattle.oppActing = true;
 
     spriteEl.classList.add(isMy ? 'lunge-right' : 'lunge-left');
+
+    // Render Frame 0 immediately so the full sprite row plays from start to finish
     let f = 0;
-    const t = setInterval(() => {
-      if (unit.asset) applySpriteFrame(spriteEl, unit.asset, f, rowIdx);
+    if (unit.asset) applySpriteFrame(spriteEl, unit.asset, 0, rowIdx);
+
+    pvpActionTimers[side] = setInterval(() => {
       f++;
       if (f >= cols) {
-        clearInterval(t);
+        clearInterval(pvpActionTimers[side]);
+        pvpActionTimers[side] = null;
         spriteEl.classList.remove('lunge-right', 'lunge-left');
+
+        // Snap cleanly back to Idle Frame 0 before firing hit/damage
+        if (unit.asset) applySpriteFrame(spriteEl, unit.asset, 0, 0);
+
         if (pvpBattle) {
           if (isMy) pvpBattle.myActing = false;
           else pvpBattle.oppActing = false;
         }
         if (onDone) onDone();
+      } else if (unit.asset) {
+        applySpriteFrame(spriteEl, unit.asset, f, rowIdx);
       }
     }, frameInterval);
   }
@@ -2047,11 +2120,13 @@
   async function finishPvpBattle(won) {
     if (!pvpBattle || pvpBattle.finished) return;
     pvpBattle.finished = true;
+    clearPvpActionTimers();
+    const prevPvpPts = Number(hero.avatar.pvpPoints) || 1000;
     renderPvpBattleUI();
 
     document.getElementById('pvp-battle-log').innerHTML = won
-      ? `<span style="color:#4ade80; font-weight:900;">🏆 VICTORY! Recording Global PvP Win...</span>`
-      : `<span style="color:#f87171; font-weight:900;">💀 DEFEAT! Recording Global PvP Match...</span>`;
+      ? `<span style="color:#4ade80; font-weight:900;">🏆 VICTORY (+10 Net PvP Pts)! Recording Match...</span>`
+      : `<span style="color:#f87171; font-weight:900;">💀 DEFEAT (-6 Net PvP Pts)! Recording Match...</span>`;
 
     try {
       const res = await fetch(API_URL, {
@@ -2074,9 +2149,19 @@
         hero.avatar.defeatedOpponents = json.data.defeatedOpponents.map(String);
       }
 
+      const ratingDelta = (Number(json.data.pvpPoints) || prevPvpPts) - prevPvpPts;
+      const ratingStr = ratingDelta >= 0 ? `+${ratingDelta}` : `${ratingDelta}`;
+      const newNet = getPvpNetScore(json.data.pvpWins, json.data.pvpLosses);
+      const netStr = newNet >= 0 ? `+${newNet}` : `${newNet}`;
+
       if (json.data.won) playAnimeSFX('levelup');
-      showToast(json.data.won ? `🏆 Victory! (${json.data.pvpWins} Total Wins)` : `⚔️ Match Recorded (${json.data.pvpLosses} Losses)`, json.data.won ? "#10b981" : "#f59e0b");
-      setTimeout(hideToast, 2200);
+      showToast(
+        json.data.won
+          ? `🏆 Victory! +10 Net (${netStr} Total) • ${ratingStr} Rating`
+          : `💀 Defeat! -6 Net (${netStr} Total) • ${ratingStr} Rating`,
+        json.data.won ? "#10b981" : "#dc2626"
+      );
+      setTimeout(hideToast, 2600);
       refreshActiveLeaderboard();
     } catch (err) {
       alert("PvP Record Error: " + err.message);
@@ -2686,6 +2771,7 @@
         };
       });
 
+      clearPvpActionTimers();
       pvpBattle = {
         mode: 'guild',
         matchId: m.matchId,
@@ -2725,6 +2811,7 @@
   async function finishGuildWarBattle(won) {
     if (!pvpBattle || pvpBattle.mode !== 'guild' || pvpBattle.finished) return;
     pvpBattle.finished = true;
+    clearPvpActionTimers();
     const matchId = pvpBattle.matchId;
     renderPvpBattleUI();
 
@@ -2778,7 +2865,7 @@
 
   window.addEventListener('beforeunload', (e) => {
     flushSyncOnExit();
-    if (pvpBattle && pvpBattle.mode === 'guild' && !pvpBattle.finished) {
+    if (pvpBattle && !pvpBattle.finished) {
       e.preventDefault();
       e.returnValue = '';
     }
