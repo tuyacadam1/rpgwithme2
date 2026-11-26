@@ -53,10 +53,11 @@
   let idleTurn = 'hero';
 
   // --- LEADERBOARD & 3v3 PVP STATE ---
-  let mainLbMode = 'tower'; // 'tower' | 'pvp'
+  let mainLbMode = 'tower';
   let pvpPlayersCache = [];
   let draftSquadIds = [];
   let pvpBattle = null;
+  let pvpSpeedMult = 1;
 
   const RARITY_MULT = { Common: 1.0, Rare: 1.2, Epic: 1.5, Legendary: 2.0, Secret: 2.6, Divine: 3.5 };
   const RARITY_ORDER = { Divine: 1, Secret: 2, Legendary: 3, Epic: 4, Rare: 5, Common: 6 };
@@ -245,7 +246,7 @@
     const btn = document.getElementById('bgm-toggle-btn');
     if (!btn) return;
     btn.innerText = bgmPlaying ? '🎵 BGM: ON' : '🔇 BGM: OFF';
-    btn.style.color = bgmPlaying ? '#fbbf24' : '#9ca3af';
+    btn.style.color = bgmPlaying ? '#fde047' : '#e2e8f0';
   }
 
   function playAnimeSFX(type) {
@@ -293,17 +294,19 @@
     meta: { cols: 1, rows: 1 }
   };
 
-  // --- 1. LOGIN (STUDENT ID ONLY) ---
+  // --- 1. LOGIN (STUDENT ID + PLAIN-TEXT PIN) ---
   async function loginStudent() {
     const studentId = document.getElementById('student-id-input').value.trim();
+    const pin = document.getElementById('student-pin-input').value.trim();
     if (!studentId) return alert("Enter your Student ID.");
+    if (!pin) return alert("Enter your PIN.");
 
     startAnimeBGM();
-    showToast("Summoning World...", "#3b82f6");
+    showToast("Summoning World...", "#e11d48");
     try {
       const res = await fetch(API_URL, {
         method: 'POST',
-        body: JSON.stringify({ action: 'studentLogin', studentId })
+        body: JSON.stringify({ action: 'studentLogin', studentId, pin })
       });
       const json = await res.json();
       if (json.status === 'error') throw new Error(json.message);
@@ -357,6 +360,25 @@
       if (found) return found;
     }
     return null;
+  }
+
+  // --- ARCADE DRAWER NAVIGATION ---
+  function openDrawer(drawerId, btn) {
+    ['drawer-hero', 'drawer-gacha', 'drawer-rank'].forEach(id => {
+      document.getElementById(id).classList.toggle('hidden', id !== drawerId);
+    });
+    document.querySelectorAll('.dock-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    if (drawerId === 'drawer-rank') refreshActiveLeaderboard();
+  }
+
+  function closeAllDrawers(btn) {
+    ['drawer-hero', 'drawer-gacha', 'drawer-rank'].forEach(id => {
+      document.getElementById(id).classList.add('hidden');
+    });
+    document.querySelectorAll('.dock-btn').forEach(b => b.classList.remove('active'));
+    const arenaBtn = btn || document.getElementById('dock-arena');
+    if (arenaBtn) arenaBtn.classList.add('active');
   }
 
   // --- 2. SYNCHRONIZED SPRITE SHEET ANIMATION LOOP ---
@@ -470,7 +492,7 @@
     return leveledUp;
   }
 
-  // --- 4. CONTINUOUS AUTO-CLIMB TOWER BATTLE ---
+  // --- 4. TOWER BATTLE (ADVANCES ON WIN, RETREATS BACKWARD ON DEFEAT) ---
   function resetCombatRound() {
     const enemy = getFloorEnemy(hero.towerFloor);
     heroMaxHP = Math.max(1, getTotalCP() * 3);
@@ -509,7 +531,7 @@
       const resBox = document.getElementById('raid-result');
 
       if (!activeChar) {
-        resBox.innerHTML = `<span style="color:#fbbf24;">🎰 Roll the Gacha Banner below to summon a hero for the Tower!</span>`;
+        resBox.innerHTML = `<span style="color:#fbbf24;">✨ Open GACHA below to summon a hero for the Tower!</span>`;
         return;
       }
 
@@ -568,7 +590,7 @@
                 hero.towerFloor -= 1;
                 hasUnsaved = true;
               }
-              resBox.innerHTML = `<span style="color:#f87171;">⚠️ Enemy too strong! Retreated to Floor ${hero.towerFloor} to farm EXP...</span>`;
+              resBox.innerHTML = `<span style="color:#fb7185;">⚠️ Enemy too strong — retreated to Floor ${hero.towerFloor} to farm EXP</span>`;
               resetCombatRound();
               renderAll();
             }, 350);
@@ -598,7 +620,10 @@
 
   function toggleIdlePause() {
     idlePaused = !idlePaused;
-    document.getElementById('pause-idle-btn').innerText = idlePaused ? '▶️ Resume Idle' : '⏸️ Pause Idle';
+    const btn = document.getElementById('pause-idle-btn');
+    btn.innerText = idlePaused ? '▶ RESUME' : '⏸ PAUSE';
+    btn.style.borderColor = idlePaused ? '#facc15' : '#10b981';
+    btn.style.color = idlePaused ? '#fde047' : '#4ade80';
   }
 
   // --- 5. SERVER-AUTHORITATIVE GACHA SYSTEM ---
@@ -867,7 +892,7 @@
     scheduleEquipSync();
   }
 
-  // --- 8. FLOOR ENEMY LOOKUP & RENDER ---
+  // --- 8. FLOOR ENEMY LOOKUP & ARCADE HUD RENDER ---
   function getFloorEnemy(floor) {
     const isBoss = floor % 10 === 0;
     const reqCP = Math.floor(250 * Math.pow(1.15, floor - 1));
@@ -888,16 +913,21 @@
   function renderArena() {
     const enemy = getFloorEnemy(hero.towerFloor);
     const charObj = getEquippedCharacterObj();
-    document.getElementById('tower-floor-badge').innerText = enemy.isBoss ? `🔥 FLOOR ${hero.towerFloor} BOSS` : `FLOOR ${hero.towerFloor}`;
-    const heroNameEl = document.getElementById('arena-hero-name');
+
     const enemyNameEl = document.getElementById('arena-enemy-name');
-    heroNameEl.innerText = charObj ? charObj.name : 'No Hero Deployed';
-    heroNameEl.title = charObj ? charObj.name : 'No Hero Deployed';
     enemyNameEl.innerText = enemy.asset.name;
     enemyNameEl.title = enemy.asset.name;
 
-    document.getElementById('arena-hero-cp').innerText = getTotalCP().toLocaleString() + " CP";
     document.getElementById('arena-enemy-cp').innerText = enemy.reqCP.toLocaleString() + " CP";
+    document.getElementById('enemy-boss-badge').innerText = enemy.isBoss ? 'BOSS' : `F${hero.towerFloor}`;
+
+    const heroPort = document.getElementById('hud-hero-portrait');
+    if (charObj) applySpriteFrame(heroPort, charObj, 0, 0);
+    else setSilhouette(heroPort);
+
+    const enemyPort = document.getElementById('hud-enemy-portrait');
+    applySpriteFrame(enemyPort, enemy.asset, 0, 0);
+
     updateHPBars();
   }
 
@@ -910,9 +940,11 @@
     document.getElementById('hud-cp').innerText = getTotalCP().toLocaleString();
     document.getElementById('hud-pts').innerText = hero.unspentPoints;
     document.getElementById('gacha-pts-display').innerText = hero.unspentPoints;
-    document.getElementById('active-char-badge').innerText = charObj
-      ? `[${charObj.rarity}] ${charObj.name}`
-      : 'No Character (Roll Gacha!)';
+
+    const badgeText = charObj ? `[${charObj.rarity}] ${charObj.name}` : 'No Hero (Open Gacha!)';
+    document.getElementById('active-char-badge').innerText = badgeText;
+    const drawerBadge = document.getElementById('drawer-char-badge');
+    if (drawerBadge) drawerBadge.innerText = badgeText;
 
     const epicEl = document.getElementById('pity-epic-text');
     const legEl = document.getElementById('pity-leg-text');
@@ -930,12 +962,6 @@
     renderSlots();
     renderStats();
     renderArena();
-  }
-
-  function focusSection(id, btn) {
-    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById(id).scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
   // --- 9. SAFE CONFLICT-FREE AUTO-SYNC + MANUAL SYNC ---
@@ -1129,14 +1155,14 @@
         const winRate = totalMatches > 0 ? Math.round((p.wins / totalMatches) * 100) : 0;
 
         return `
-          <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; margin-bottom:6px; border-radius:10px; background:${isMe ? 'rgba(245,158,11,0.15)' : '#0f172a'}; border:1px solid ${isMe ? 'var(--gold)' : '#1e293b'};">
-            <div style="display:flex; align-items:center; gap:8px; min-width:0;">
-              <span style="font-size:15px; font-weight:900; min-width:26px; text-align:center; color:${idx < 3 ? 'var(--gold)' : 'var(--muted)'};">${medal}</span>
+          <div class="pvp-challenger-card" style="${isMe ? 'border-color:var(--gold); background:rgba(245,158,11,0.18);' : ''}">
+            <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+              <span style="font-size:16px; font-weight:900; min-width:28px; text-align:center; color:${idx < 3 ? 'var(--gold)' : '#cbd5e1'};">${medal}</span>
               <div style="min-width:0;">
-                <div style="font-weight:800; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                  ${p.name} <span style="color:#38bdf8; font-size:10px;">[${p.className}]</span>
+                <div style="font-weight:900; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                  ${p.name} <span style="color:#38bdf8; font-size:11px;">[${p.className}]</span>
                 </div>
-                <div style="font-size:10px; color:var(--muted);">
+                <div style="font-size:11px; color:#cbd5e1;">
                   ${p.wins}W - ${p.losses}L (${winRate}% WR) • ${p.teamCP.toLocaleString()} CP
                 </div>
               </div>
@@ -1246,7 +1272,17 @@
     document.getElementById('tasks-modal').classList.add('hidden');
   }
 
-  // --- 11. 3v3 MISCRITS-STYLE TACTICAL PVP & GLOBAL LEADERBOARD ---
+  // --- 11. 3v3 GLOBAL PVP LOBBY & FULL-SCREEN ARCADE BATTLE ---
+  function togglePvpSpeed() {
+    pvpSpeedMult = pvpSpeedMult === 1 ? 2 : 1;
+    const btn = document.getElementById('pvp-speed-btn');
+    if (btn) {
+      btn.innerText = `${pvpSpeedMult}x`;
+      btn.style.borderColor = pvpSpeedMult === 2 ? '#facc15' : '#e2e8f0';
+      btn.style.color = pvpSpeedMult === 2 ? '#fde047' : '#fff';
+    }
+  }
+
   function openPvpModal() {
     if (!hero) return;
     if (hero.avatar.unlockedChars.length === 0) {
@@ -1254,6 +1290,8 @@
     }
     pvpBattle = null;
     document.getElementById('pvp-modal').classList.remove('hidden');
+    document.getElementById('pvp-lobby-shell').classList.remove('hidden');
+    document.getElementById('pvp-view-battle').classList.add('hidden');
     switchPvpTab('lobby');
     loadPvpLobby();
   }
@@ -1261,18 +1299,19 @@
   function closePvpModal() {
     pvpBattle = null;
     document.getElementById('pvp-modal').classList.add('hidden');
+    closeAllDrawers();
   }
 
   function switchPvpTab(tab) {
-    document.getElementById('pvp-tabs').classList.remove('hidden');
+    document.getElementById('pvp-lobby-shell').classList.remove('hidden');
     document.getElementById('pvp-view-lobby').classList.toggle('hidden', tab !== 'lobby');
     document.getElementById('pvp-view-rank').classList.toggle('hidden', tab !== 'rank');
     document.getElementById('pvp-view-squad').classList.toggle('hidden', tab !== 'squad');
     document.getElementById('pvp-view-battle').classList.add('hidden');
 
-    document.getElementById('pvp-tab-lobby').style.background = tab === 'lobby' ? '' : '#1f2937';
-    document.getElementById('pvp-tab-rank').style.background = tab === 'rank' ? '' : '#1f2937';
-    document.getElementById('pvp-tab-squad').style.background = tab === 'squad' ? '' : '#1f2937';
+    document.getElementById('pvp-tab-lobby').classList.toggle('active', tab === 'lobby');
+    document.getElementById('pvp-tab-rank').classList.toggle('active', tab === 'rank');
+    document.getElementById('pvp-tab-squad').classList.toggle('active', tab === 'squad');
 
     if (tab === 'rank') {
       loadGlobalPvpWinsLeaderboard('pvp-wins-leaderboard-list');
@@ -1286,7 +1325,7 @@
     const list = document.getElementById('pvp-global-list');
     document.getElementById('pvp-my-pts').innerText = hero.avatar.pvpPoints || 1000;
     document.getElementById('pvp-my-record').innerText = `${hero.avatar.pvpWins || 0}W - ${hero.avatar.pvpLosses || 0}L`;
-    list.innerHTML = '<p style="text-align:center; color:var(--muted); padding:20px;">Loading Global Challengers across all classes...</p>';
+    list.innerHTML = '<p style="text-align:center; color:#cbd5e1; padding:20px;">Loading Global Challengers across all classes...</p>';
 
     try {
       const res = await fetch(API_URL, {
@@ -1307,7 +1346,7 @@
       const defeatedSet = new Set((hero.avatar.defeatedOpponents || []).map(String));
 
       if (pvpPlayersCache.length === 0) {
-        list.innerHTML = '<p style="text-align:center; color:var(--muted); padding:20px;">No players with heroes found yet.</p>';
+        list.innerHTML = '<p style="text-align:center; color:#cbd5e1; padding:20px;">No players with heroes found yet.</p>';
         return;
       }
 
@@ -1317,30 +1356,30 @@
         const isDefeated = defeatedSet.has(String(p.studentId));
         const squadThumbs = p.squad.map(sq => {
           const asset = (hero.assets || []).find(a => a.assetId === sq.assetId);
-          return asset ? `<div style="width:28px; height:28px; border-radius:6px; border:1px solid #334155; ${getThumbSpriteStyle(asset)}" title="${sq.name}"></div>` : '';
+          return asset ? `<div style="width:30px; height:30px; border-radius:6px; border:1px solid #475569; background-color:#090d16; ${getThumbSpriteStyle(asset)}" title="${sq.name}"></div>` : '';
         }).join('');
 
         let actionBadge = '';
         if (isMe) {
           actionBadge = `<span class="badge" style="color:var(--gold);">YOU</span>`;
         } else if (isDefeated) {
-          actionBadge = `<button class="plus-btn" disabled style="background:#064e3b; color:#6ee7b7; border:1px solid #10b981; padding:7px 10px; cursor:default;">✓ Won Today</button>`;
+          actionBadge = `<button class="pvp-won-btn" disabled>✓ Won Today</button>`;
         } else {
-          actionBadge = `<button class="plus-btn" style="background:linear-gradient(90deg, #e11d48, #be123c); color:#fff; padding:7px 12px;" onclick="startPvpBattle('${p.studentId}')">⚔️ Fight</button>`;
+          actionBadge = `<button class="pvp-fight-btn" onclick="startPvpBattle('${p.studentId}')">⚔️ Fight</button>`;
         }
 
         return `
-          <div class="rpg-card" style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; ${isMe ? 'border-color:var(--gold); background:rgba(245,158,11,0.12);' : isDefeated ? 'opacity:0.78; border-color:#065f46;' : ''}">
-            <div style="display:flex; align-items:center; gap:8px; min-width:0;">
-              <span style="font-size:15px; font-weight:900; min-width:26px; text-align:center; color:${idx < 3 ? 'var(--gold)' : 'var(--muted)'};">${medal}</span>
+          <div class="pvp-challenger-card" style="${isMe ? 'border-color:var(--gold); background:rgba(245,158,11,0.18);' : isDefeated ? 'border-color:rgba(52,211,153,0.45);' : ''}">
+            <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+              <span style="font-size:16px; font-weight:900; min-width:28px; text-align:center; color:${idx < 3 ? 'var(--gold)' : '#cbd5e1'};">${medal}</span>
               <div style="min-width:0;">
-                <div style="font-weight:800; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                  ${p.name} <span style="font-size:10px; color:#38bdf8;">[${p.className}]</span>
+                <div style="font-weight:900; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                  ${p.name} <span style="font-size:11px; color:#38bdf8;">[${p.className}]</span>
                 </div>
-                <div style="font-size:10px; color:var(--muted); margin-bottom:4px;">
+                <div style="font-size:11px; color:#e2e8f0; margin-bottom:5px;">
                   <b style="color:#4ade80;">${p.wins}W</b>-<b style="color:#f87171;">${p.losses}L</b> • ⭐ ${p.pvpPoints} Pts • ${p.teamCP.toLocaleString()} CP
                 </div>
-                <div style="display:flex; gap:4px;">${squadThumbs}</div>
+                <div style="display:flex; gap:5px;">${squadThumbs}</div>
               </div>
             </div>
             ${actionBadge}
@@ -1370,7 +1409,7 @@
         `;
       }
       return `
-        <div class="rpg-card" style="text-align:center; padding:18px 6px; border-style:dashed; border-color:#334155; color:var(--muted); font-size:11px;">
+        <div class="rpg-card" style="text-align:center; padding:18px 6px; border-style:dashed; border-color:#475569; color:#cbd5e1; font-size:11px;">
           Slot ${i + 1}<br>(Empty)
         </div>
       `;
@@ -1382,7 +1421,7 @@
       const inSquad = draftSquadIds.includes(u.id);
       return `
         <div class="rpg-card rarity-${asset.rarity}" onclick="toggleDraftSquad('${u.id}')"
-          style="text-align:center; padding:8px 4px; cursor:pointer; ${inSquad ? 'border-color:#4ade80; box-shadow:0 0 10px rgba(74,222,128,0.4);' : ''}">
+          style="text-align:center; padding:8px 4px; cursor:pointer; ${inSquad ? 'border-color:#4ade80; box-shadow:0 0 10px rgba(74,222,128,0.45);' : ''}">
           <div style="width:48px; height:48px; margin:0 auto; ${getThumbSpriteStyle(asset)}"></div>
           <div style="font-size:10px; font-weight:800; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${asset.name}</div>
           <div style="font-size:9px; color:${inSquad ? '#4ade80' : 'var(--gold)'};">${inSquad ? '✓ IN SQUAD' : `★${u.stars}`}</div>
@@ -1447,12 +1486,14 @@
       const asset = allChars.find(a => a.assetId === id);
       const u = hero.avatar.unlockedChars.find(x => x.id === id);
       if (!asset || !u) return null;
-      const mult = (RARITY_MULT[asset.rarity] || 1.0) + (((Number(u.stars) || 1) - 1) * 0.1);
+      const stars = Number(u.stars) || 1;
+      const mult = (RARITY_MULT[asset.rarity] || 1.0) + ((stars - 1) * 0.1);
       const cp = Math.max(100, Math.floor(basePower * mult));
       return {
         assetId: id,
         name: asset.name,
         rarity: asset.rarity,
+        stars,
         asset,
         cp,
         maxHp: cp * 4,
@@ -1483,6 +1524,7 @@
         assetId: sq.assetId,
         name: sq.name,
         rarity: sq.rarity,
+        stars: Number(sq.stars) || 1,
         asset,
         cp,
         maxHp: cp * 4,
@@ -1505,10 +1547,7 @@
       finished: false
     };
 
-    document.getElementById('pvp-tabs').classList.add('hidden');
-    document.getElementById('pvp-view-lobby').classList.add('hidden');
-    document.getElementById('pvp-view-rank').classList.add('hidden');
-    document.getElementById('pvp-view-squad').classList.add('hidden');
+    document.getElementById('pvp-lobby-shell').classList.add('hidden');
     document.getElementById('pvp-view-battle').classList.remove('hidden');
 
     document.getElementById('pvp-b-myname').innerText = `${hero.name} (3v3)`;
@@ -1523,27 +1562,36 @@
     const myU = pvpBattle.myTeam[pvpBattle.myActiveIdx];
     const oppU = pvpBattle.oppTeam[pvpBattle.oppActiveIdx];
 
-    document.getElementById('pvp-act-myname').innerText = myU.name;
+    if (myU.asset) applySpriteFrame(document.getElementById('pvp-my-portrait'), myU.asset, 0, 0);
+    if (oppU.asset) applySpriteFrame(document.getElementById('pvp-opp-portrait'), oppU.asset, 0, 0);
+    document.getElementById('pvp-my-stars').innerText = '★'.repeat(Math.min(7, myU.stars || 1));
+    document.getElementById('pvp-opp-stars').innerText = '★'.repeat(Math.min(7, oppU.stars || 1));
+
     document.getElementById('pvp-act-myhp').innerText = `${Math.max(0, myU.hp).toLocaleString()}/${myU.maxHp.toLocaleString()}`;
     document.getElementById('pvp-my-hpbar').style.width = `${Math.max(0, (myU.hp / myU.maxHp) * 100)}%`;
     document.getElementById('pvp-act-myen').innerText = myU.energy;
-    document.getElementById('pvp-my-shield-tag').innerText = myU.shield ? '🛡️ SHIELDED' : '';
+    document.getElementById('pvp-my-enbar').style.width = `${Math.min(100, myU.energy)}%`;
+    document.getElementById('pvp-my-shield-tag').innerText = myU.shield ? '🛡️ SHIELD' : '';
 
-    document.getElementById('pvp-act-oppname').innerText = oppU.name;
     document.getElementById('pvp-act-opphp').innerText = `${Math.max(0, oppU.hp).toLocaleString()}/${oppU.maxHp.toLocaleString()}`;
     document.getElementById('pvp-opp-hpbar').style.width = `${Math.max(0, (oppU.hp / oppU.maxHp) * 100)}%`;
     document.getElementById('pvp-act-oppen').innerText = oppU.energy;
-    document.getElementById('pvp-opp-shield-tag').innerText = oppU.shield ? '🛡️ SHIELDED' : '';
+    document.getElementById('pvp-opp-enbar').style.width = `${Math.min(100, oppU.energy)}%`;
+    document.getElementById('pvp-opp-shield-tag').innerText = oppU.shield ? '🛡️ SHIELD' : '';
 
     const turnEl = document.getElementById('pvp-b-turn');
-    turnEl.innerText = pvpBattle.turn === 'player' ? '🟢 YOUR TURN' : '🔴 ENEMY TURN';
+    turnEl.innerText = pvpBattle.turn === 'player' ? 'YOUR TURN' : 'ENEMY TURN';
+    turnEl.style.background = pvpBattle.turn === 'player'
+      ? 'linear-gradient(180deg, #facc15, #ca8a04)'
+      : 'linear-gradient(180deg, #f43f5e, #9f1239)';
+    turnEl.style.color = pvpBattle.turn === 'player' ? '#1e1b4b' : '#fff';
 
     document.getElementById('pvp-my-bench').innerHTML = pvpBattle.myTeam.map((u, idx) =>
-      `<span style="padding:2px 7px; border-radius:6px; font-size:10px; font-weight:800; background:${u.hp > 0 ? (idx === pvpBattle.myActiveIdx ? '#0284c7' : '#1e293b') : '#450a0a'}; color:${u.hp > 0 ? '#fff' : '#f87171'};">${idx + 1}. ${u.name.split(' ')[0]} ${u.hp > 0 ? '❤️' : '💀'}</span>`
+      `<span style="padding:2px 8px; border-radius:99px; font-size:10px; font-weight:800; border:1px solid rgba(255,255,255,0.25); background:${u.hp > 0 ? (idx === pvpBattle.myActiveIdx ? '#0284c7' : 'rgba(15,23,42,0.85)') : '#450a0a'}; color:${u.hp > 0 ? '#fff' : '#f87171'};">${idx + 1}. ${u.name.split(' ')[0]} ${u.hp > 0 ? '❤️' : '💀'}</span>`
     ).join('');
 
     document.getElementById('pvp-opp-bench').innerHTML = pvpBattle.oppTeam.map((u, idx) =>
-      `<span style="padding:2px 7px; border-radius:6px; font-size:10px; font-weight:800; background:${u.hp > 0 ? (idx === pvpBattle.oppActiveIdx ? '#be123c' : '#1e293b') : '#450a0a'}; color:${u.hp > 0 ? '#fff' : '#f87171'};">${idx + 1}. ${u.name.split(' ')[0]} ${u.hp > 0 ? '❤️' : '💀'}</span>`
+      `<span style="padding:2px 8px; border-radius:99px; font-size:10px; font-weight:800; border:1px solid rgba(255,255,255,0.25); background:${u.hp > 0 ? (idx === pvpBattle.oppActiveIdx ? '#be123c' : 'rgba(15,23,42,0.85)') : '#450a0a'}; color:${u.hp > 0 ? '#fff' : '#f87171'};">${idx + 1}. ${u.name.split(' ')[0]} ${u.hp > 0 ? '❤️' : '💀'}</span>`
     ).join('');
 
     const isMyTurn = pvpBattle.turn === 'player' && !pvpBattle.finished;
@@ -1555,7 +1603,7 @@
     document.getElementById('pvp-switch-row').innerHTML = pvpBattle.myTeam.map((u, idx) => {
       const canSwitch = isMyTurn && idx !== pvpBattle.myActiveIdx && u.hp > 0;
       return `
-        <button class="plus-btn" ${canSwitch ? '' : 'disabled'} style="padding:6px; font-size:10px; background:${idx === pvpBattle.myActiveIdx ? '#0369a1' : '#1e293b'}; color:#fff; opacity:${u.hp > 0 ? 1 : 0.4};" onclick="switchPvpHero(${idx})">
+        <button class="plus-btn" ${canSwitch ? '' : 'disabled'} style="padding:7px 4px; font-size:10px; background:${idx === pvpBattle.myActiveIdx ? '#0369a1' : '#1e293b'}; border:1px solid #475569; color:#fff; opacity:${u.hp > 0 ? 1 : 0.4};" onclick="switchPvpHero(${idx})">
           ${idx === pvpBattle.myActiveIdx ? '★ Active' : (u.hp > 0 ? `Swap: ${u.name.split(' ')[0]}` : `💀 ${u.name.split(' ')[0]}`)}
         </button>
       `;
@@ -1568,6 +1616,7 @@
     const unit = isMy ? pvpBattle.myTeam[pvpBattle.myActiveIdx] : pvpBattle.oppTeam[pvpBattle.oppActiveIdx];
     const spriteEl = document.getElementById(isMy ? 'pvp-sprite-my' : 'pvp-sprite-opp');
     const cols = Math.max(1, unit.asset?.meta?.cols || 6);
+    const frameInterval = Math.floor(125 / pvpSpeedMult);
 
     if (isMy) pvpBattle.myActing = true;
     else pvpBattle.oppActing = true;
@@ -1586,7 +1635,7 @@
         }
         if (onDone) onDone();
       }
-    }, 125);
+    }, frameInterval);
   }
 
   function switchPvpHero(newIdx) {
@@ -1598,7 +1647,7 @@
     pvpBattle.turn = 'enemy';
     document.getElementById('pvp-battle-log').innerHTML = `🔄 You switched in <b>${target.name}</b>!`;
     renderPvpBattleUI();
-    setTimeout(runPvpEnemyTurn, 850);
+    setTimeout(runPvpEnemyTurn, Math.floor(850 / pvpSpeedMult));
   }
 
   function usePvpSkill(skillIdx) {
@@ -1621,7 +1670,7 @@
       document.getElementById('pvp-battle-log').innerHTML = `🛡️ <b>${myU.name}</b> raised Iron Guard (50% Shield) and healed <b>+${healAmt} HP</b>!`;
       pvpBattle.turn = 'enemy';
       renderPvpBattleUI();
-      setTimeout(runPvpEnemyTurn, 900);
+      setTimeout(runPvpEnemyTurn, Math.floor(900 / pvpSpeedMult));
       return;
     }
 
@@ -1674,8 +1723,8 @@
 
         pvpBattle.turn = 'enemy';
         renderPvpBattleUI();
-        setTimeout(runPvpEnemyTurn, 850);
-      }, 380);
+        setTimeout(runPvpEnemyTurn, Math.floor(850 / pvpSpeedMult));
+      }, Math.floor(380 / pvpSpeedMult));
     });
   }
 
@@ -1753,7 +1802,7 @@
 
         pvpBattle.turn = 'player';
         renderPvpBattleUI();
-      }, 380);
+      }, Math.floor(380 / pvpSpeedMult));
     });
   }
 
@@ -1814,6 +1863,8 @@
 
   Object.assign(window, {
     loginStudent,
+    openDrawer,
+    closeAllDrawers,
     toggleAnimeBGM,
     toggleIdlePause,
     rollGacha,
@@ -1823,7 +1874,6 @@
     openArmory,
     closeArmory,
     equipGear,
-    focusSection,
     syncProgress,
     toggleMainLeaderboardMode,
     refreshActiveLeaderboard,
@@ -1838,6 +1888,7 @@
     toggleDraftSquad,
     savePvpSquad,
     startPvpBattle,
+    togglePvpSpeed,
     usePvpSkill,
     switchPvpHero
   });
