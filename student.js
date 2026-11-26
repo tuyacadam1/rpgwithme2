@@ -151,8 +151,13 @@
           }
         }
         entry.ready = true;
-        if (typeof renderAll === 'function' && hero) renderAll();
-        if (typeof renderPvpBattleUI === 'function' && pvpBattle) renderPvpBattleUI();
+        if (hero) {
+          const charObj = getEquippedCharacterObj();
+          if (charObj) applyPortraitCloseup(document.getElementById('hud-hero-portrait'), charObj);
+          const enemy = getFloorEnemy(hero.towerFloor);
+          if (enemy && enemy.asset) applyPortraitCloseup(document.getElementById('hud-enemy-portrait'), enemy.asset);
+        }
+        if (pvpBattle) renderPvpBattleUI();
       } catch (_) {
         for (let r = 0; r < rows; r++) {
           entry.rowMetrics[r] = { zoom: 1.08, centerNorm: 0.48, faceCenterX: 0.5, faceCenterY: 0.28, faceZoom: 1.9 };
