@@ -215,12 +215,15 @@
     </div>
   </div>
 
-  <!-- ARMORY MODAL -->
+ <!-- ARMORY MODAL -->
   <div id="armory-modal" class="modal hidden" onclick="if(event.target===this) closeArmory()">
     <div class="arcade-panel">
       <div class="card-title">
         <span id="armory-title">🎒 Armory</span>
-        <button class="plus-btn" style="background:#334155;" onclick="closeArmory()">✕ Close</button>
+        <div style="display:flex; gap:6px;">
+          <button id="delete-unused-gear-btn" class="plus-btn" style="background:#991b1b; border:1px solid #ef4444;" onclick="deleteAllUnusedGear()">🗑️ Clear Unused</button>
+          <button class="plus-btn" style="background:#334155;" onclick="closeArmory()">✕ Close</button>
+        </div>
       </div>
       <div id="armory-items"></div>
     </div>
