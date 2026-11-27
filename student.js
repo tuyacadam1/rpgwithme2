@@ -1041,6 +1041,7 @@
       renderAll();
     } finally {
       isRollingGacha = false;
+      renderAll();
     }
   }
 
