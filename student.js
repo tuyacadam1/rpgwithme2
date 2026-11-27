@@ -2572,7 +2572,7 @@
     });
   }
 
-  async function finishPvpBattle(clientWon) {
+  async function finishPvpBattle(clientWon, isForfeit = false) {
     if (!pvpBattle || pvpBattle.finished) return;
     pvpBattle.finished = true;
     clearPvpActionTimers();
@@ -2589,7 +2589,8 @@
         token: sessionToken,
         studentId: hero.studentId,
         opponentId: oppId,
-        won: clientWon
+        won: clientWon,
+        forfeit: Boolean(isForfeit)
       });
 
       const serverWon = Boolean(json.data.won);
@@ -2629,7 +2630,6 @@
       loadPvpLobby();
     }, 900);
   }
-
   // --- 12. GUILD HALL, LIVE COC-STYLE WAR TIMER & WEEKEND 3v3 GUILD WAR ---
   function getClientWarTimingFallback() {
     const now = new Date();
@@ -3232,7 +3232,7 @@
     }
   }
 
-  async function finishGuildWarBattle(clientWon) {
+  async function finishGuildWarBattle(clientWon, isForfeit = false) {
     if (!pvpBattle || pvpBattle.finished) return;
     pvpBattle.finished = true;
     clearPvpActionTimers();
@@ -3245,7 +3245,7 @@
 
     // Ensure minimum 3.5s battle duration required by server anti-skip guard
     const elapsed = Date.now() - startedAt;
-    if (elapsed < 3600) {
+    if (!isForfeit && elapsed < 3600) {
       await new Promise(r => setTimeout(r, 3600 - elapsed));
     }
 
@@ -3255,7 +3255,8 @@
         token: sessionToken,
         studentId: hero.studentId,
         matchId: matchId,
-        won: clientWon
+        won: clientWon,
+        forfeit: Boolean(isForfeit)
       });
 
       const serverWon = Boolean(json.data.won);
