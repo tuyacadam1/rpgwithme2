@@ -53,7 +53,9 @@
     t.classList.add('hidden');
   }
 
-  // --- SAFE JSON POST HELPER (SUPPORTS OPTIONAL TTL CACHE & KEEP-ALIVE) ---
+  // --- SAFE JSON POST HELPER (SUPPORTS OPTIONAL TTL CACHE, RETRY & REQUEST QUEUE) ---
+  let apiQueue = Promise.resolve();
+
   async function apiPost(payload, { cacheKey = '', cacheTtlMs = 0, keepalive = false } = {}) {
     if (cacheKey && cacheTtlMs > 0 && apiCache.has(cacheKey)) {
       const cached = apiCache.get(cacheKey);
@@ -62,31 +64,46 @@
       }
     }
 
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload),
-      keepalive
-    });
-    const rawText = await res.text();
-    let json;
-    try {
-      json = JSON.parse(rawText);
-    } catch (_) {
-      throw new Error("Server returned non-JSON response. Verify Web App deployment ('Anyone') and API_URL.");
-    }
-    if (json.status === 'error') {
-      const msg = String(json.message || 'Server error');
-      if (msg.toLowerCase().includes('session token') && hero) {
-        alert("⚠️ Session expired or opened in another tab. Please log in again.");
-        location.reload();
+    const executeFetch = async () => {
+      const fetchOpts = {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      };
+      if (keepalive) fetchOpts.keepalive = true;
+
+      let res;
+      try {
+        res = await fetch(API_URL, fetchOpts);
+      } catch (netErr) {
+        await new Promise(r => setTimeout(r, 600));
+        res = await fetch(API_URL, fetchOpts);
       }
-      throw new Error(msg);
-    }
-    if (cacheKey && cacheTtlMs > 0) {
-      apiCache.set(cacheKey, { ts: Date.now(), value: json });
-    }
-    return json;
+
+      const rawText = await res.text();
+      let json;
+      try {
+        json = JSON.parse(rawText);
+      } catch (_) {
+        throw new Error("Server returned non-JSON response. Verify Web App deployment ('Anyone') and API_URL.");
+      }
+      if (json.status === 'error') {
+        const msg = String(json.message || 'Server error');
+        if (msg.toLowerCase().includes('session token') && hero) {
+          alert("⚠️ Session expired or opened in another tab. Please log in again.");
+          location.reload();
+        }
+        throw new Error(msg);
+      }
+      if (cacheKey && cacheTtlMs > 0) {
+        apiCache.set(cacheKey, { ts: Date.now(), value: json });
+      }
+      return json;
+    };
+
+    const run = apiQueue.then(executeFetch, executeFetch);
+    apiQueue = run.catch(() => {});
+    return run;
   }
 
   // --- DEVTOOLS & CONSOLE DETERRENT SHIELD ---
@@ -905,22 +922,21 @@
         heroSprite.classList.add('lunge-right');
         playAnimeSFX('slash');
 
-        setTimeout(() => {
+        triggerHeroAction(targetRow, frameMs, () => {
+          heroSprite.classList.remove('lunge-right');
           enemySprite.classList.add('hit-flash');
           enemyHP = Math.max(0, enemyHP - dmg);
           spawnFloatingDamage('combatant-enemy', dmg, isCrit ? '#fbbf24' : '#ffffff');
           updateHPBars();
-        }, frameMs * 3);
 
-        triggerHeroAction(targetRow, frameMs, () => {
-          heroSprite.classList.remove('lunge-right');
-          enemySprite.classList.remove('hit-flash');
-
-          if (enemyHP <= 0) {
-            handleIdleVictory(enemy);
-          } else {
-            idleTurn = 'enemy';
-          }
+          setTimeout(() => {
+            enemySprite.classList.remove('hit-flash');
+            if (enemyHP <= 0) {
+              handleIdleVictory(enemy);
+            } else {
+              idleTurn = 'enemy';
+            }
+          }, 260);
         });
 
       } else if (idleTurn === 'enemy') {
@@ -929,18 +945,16 @@
         enemySprite.classList.add('lunge-left');
 
         setTimeout(() => {
+          enemySprite.classList.remove('lunge-left');
           heroSprite.classList.add('hit-flash');
           heroHP = Math.max(0, heroHP - enemyDmg);
           spawnFloatingDamage('combatant-hero', enemyDmg, '#f87171');
           updateHPBars();
-        }, 220);
 
-        setTimeout(() => {
-          enemySprite.classList.remove('lunge-left');
-          heroSprite.classList.remove('hit-flash');
+          setTimeout(() => {
+            heroSprite.classList.remove('hit-flash');
 
-          if (heroHP <= 0) {
-            setTimeout(() => {
+            if (heroHP <= 0) {
               if (hero.towerFloor > 1) {
                 hero.towerFloor -= 1;
                 hasUnsaved = true;
@@ -949,11 +963,11 @@
               resBox.innerHTML = `<span style="color:#fb7185;">⚠️ Enemy too strong — retreated to Floor ${hero.towerFloor} to farm EXP</span>`;
               resetCombatRound();
               renderAll();
-            }, 350);
-          } else {
-            idleTurn = 'hero';
-          }
-        }, 650);
+            } else {
+              idleTurn = 'hero';
+            }
+          }, 280);
+        }, 380);
       }
     }, 1150);
   }
