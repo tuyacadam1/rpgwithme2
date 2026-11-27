@@ -1580,8 +1580,21 @@
     }, 30000);
   }
 
+  let manualSyncPending = false;
+
   async function syncProgress(silent = false) {
     if (!hero || devToolsOpen) return;
+
+    const syncBtn = document.getElementById('hud-sync-btn');
+    if (!silent) {
+      manualSyncPending = true;
+      if (syncBtn) {
+        syncBtn.disabled = true;
+        syncBtn.innerText = "⏳ Syncing...";
+      }
+      showToast("☁️ Syncing Hero...", "#0284c7");
+    }
+
     if (isSyncing) {
       queuedSync = true;
       return;
@@ -1589,18 +1602,13 @@
 
     isSyncing = true;
     queuedSync = false;
-    const syncBtn = document.getElementById('hud-sync-btn');
-    if (syncBtn && !silent) {
-      syncBtn.disabled = true;
-      syncBtn.innerText = "⏳ Syncing...";
-    }
+    const isManual = manualSyncPending;
+    manualSyncPending = false;
 
     const syncRevision = localEquipRevision;
     const sentLevel = Number(hero.stats.level) || 1;
     const sentExp = Number(hero.stats.exp) || 0;
     const sentFloor = Number(hero.towerFloor) || 1;
-
-    if (!silent) showToast("☁️ Syncing Hero...", "#0284c7");
 
     try {
       const json = await apiPost(buildSaveStatePayloadObj());
@@ -1644,23 +1652,23 @@
         document.getElementById('raid-result').innerHTML =
           `<span style="color:#4ade80;">🎁 Loot Drop: [${escHtml(best.rarity)}] ${escHtml(best.name)} (+${best.power})!</span>`;
         showToast(`🎁 Loot Drop: [${best.rarity}] ${best.name}!`, "#10b981", 2600);
-      } else if (!silent) {
+      } else if (isManual) {
         showToast("✅ Synced!", "#10b981", 1800);
       }
     } catch (err) {
-      if (!silent) {
+      if (isManual) {
         hideToast();
         alert("Sync failed: " + err.message);
       }
     } finally {
       isSyncing = false;
-      if (syncBtn) {
+      if (syncBtn && !manualSyncPending) {
         syncBtn.disabled = false;
         syncBtn.innerText = "☁️ Sync";
       }
       if (queuedSync) {
         queuedSync = false;
-        setTimeout(() => syncProgress(true), 400);
+        setTimeout(() => syncProgress(false), 300);
       }
     }
   }
