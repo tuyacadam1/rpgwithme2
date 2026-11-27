@@ -1989,26 +1989,26 @@
   }
 
   function handleBattleExitClick() {
-    if (!pvpBattle) {
-      closePvpModal();
-      return;
-    }
-    if (pvpBattle.mode === 'guild' && !pvpBattle.finished) {
-      const ok = confirm("⚠️ Leaving an active Guild War battle counts as a LOSS and forfeits 25% of your Guild War Points! Retreat?");
-      if (!ok) return;
-      finishGuildWarBattle(false);
-      return;
-    }
-    if (pvpBattle.mode === 'pvp' && !pvpBattle.finished) {
-      const ok = confirm("⚠️ Leaving an active 3v3 PvP match counts as a LOSS (-6 Net PvP Pts & rating penalty)! Retreat?");
-      if (!ok) return;
-      finishPvpBattle(false);
-      return;
-    }
-    clearPvpActionTimers();
-    pvpBattle = null;
-    switchPvpTab('lobby');
+   if (!pvpBattle) {
+    closePvpModal();
+    return;
   }
+   if (pvpBattle.mode === 'guild' && !pvpBattle.finished) {
+    const ok = confirm("⚠️ Leaving an active Guild War battle counts as a LOSS and forfeits 25% of your Guild War Points! Retreat?");
+    if (!ok) return;
+    finishGuildWarBattle(false, true);
+    return;
+  }
+  if (pvpBattle.mode === 'pvp' && !pvpBattle.finished) {
+    const ok = confirm("⚠️ Leaving an active 3v3 PvP match counts as a LOSS (-6 Net PvP Pts & rating penalty)! Retreat?");
+    if (!ok) return;
+    finishPvpBattle(false, true);
+    return;
+  }
+  clearPvpActionTimers();
+  pvpBattle = null;
+  switchPvpTab('lobby');
+}
 
   function switchPvpTab(tab) {
     document.getElementById('pvp-lobby-shell').classList.remove('hidden');
