@@ -1010,8 +1010,13 @@
     if (hero.unspentPoints < cost) return alert(`Need ${cost} Class Points to summon!`);
 
     isRollingGacha = true;
-    document.getElementById('roll-1-btn').disabled = true;
-    document.getElementById('roll-5-btn').disabled = true;
+    const btn1 = document.getElementById('roll-1-btn');
+    const btn5 = document.getElementById('roll-5-btn');
+    btn1.disabled = true;
+    btn5.disabled = true;
+    if (count === 1) btn1.innerText = "⏳ Summoning...";
+    else btn5.innerText = "⏳ Summoning...";
+
     showToast(isWeekendBoostActive() ? "🍀 Summoning (2x Weekend Luck)..." : "✨ Summoning...", "#9333ea");
 
     try {
@@ -1034,13 +1039,13 @@
 
       showToast("✨ Hero Summoned!", "#9333ea", 1600);
       resetCombatRound();
-      renderAll();
     } catch (err) {
       hideToast();
       alert("Summon Error: " + err.message);
-      renderAll();
     } finally {
       isRollingGacha = false;
+      btn1.innerText = "🎲 1x Summon (5 Pts)";
+      btn5.innerText = "🌟 5x Summon (22 Pts)";
       renderAll();
     }
   }
