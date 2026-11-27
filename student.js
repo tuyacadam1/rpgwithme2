@@ -1373,11 +1373,12 @@
 
     const unusedIds = targetPool
       .filter(i => !equippedIds.has(String(i.id)))
-      .map(i => i.id);
+      .map(i => i.id)
+      .slice(0, 150);
 
     if (unusedIds.length === 0) return;
 
-    const ok = confirm(`Delete all ${unusedIds.length} unequipped gear item(s) in this view? Equipped gear will NOT be deleted.`);
+    const ok = confirm(`Delete ${unusedIds.length} unequipped gear item(s) in this view? Equipped gear will NOT be deleted.`);
     if (!ok) return;
 
     deleteGearItems(unusedIds);
