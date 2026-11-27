@@ -1457,8 +1457,9 @@
     if (secEl) secEl.innerText = `${hero.avatar.pitySecret || 0}/50`;
     if (divEl) divEl.innerText = `${hero.avatar.pityDivine || 0}/100`;
 
-    document.getElementById('roll-1-btn').disabled = hero.unspentPoints < 5;
-    document.getElementById('roll-5-btn').disabled = hero.unspentPoints < 22;
+    // Inside renderAll() in student.js:
+    document.getElementById('roll-1-btn').disabled = isRollingGacha || hero.unspentPoints < 5;
+    document.getElementById('roll-5-btn').disabled = isRollingGacha || hero.unspentPoints < 22;
 
     renderUnlockedCharacters();
     renderSlots();
