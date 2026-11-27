@@ -9,12 +9,64 @@
       .replace(/"/g, '&quot;');
   }
 
-  // --- SAFE JSON POST HELPER (HANDLES NON-JSON / SESSION EXPIRY CLEANLY) ---
-  async function apiPost(payload) {
+  // --- CLIENT CACHE & NON-BLOCKING NOTIFIER HELPERS ---
+  const apiCache = new Map();
+  let toastAutoHideTimer = null;
+
+  function invalidateCache(prefixes = []) {
+    for (const key of apiCache.keys()) {
+      if (prefixes.length === 0 || prefixes.some(p => key.startsWith(p))) {
+        apiCache.delete(key);
+      }
+    }
+  }
+
+  function showToast(msg, bg = '#1e293b', autoHideMs = 0) {
+    const t = document.getElementById('toast');
+    if (!t) return;
+    if (toastAutoHideTimer) {
+      clearTimeout(toastAutoHideTimer);
+      toastAutoHideTimer = null;
+    }
+    t.innerText = msg;
+    t.style.background = bg;
+    t.style.display = 'block';
+    t.style.opacity = '1';
+    t.style.zIndex = '99999';
+    t.classList.remove('hidden');
+    t.classList.add('show');
+    if (autoHideMs > 0) {
+      toastAutoHideTimer = setTimeout(hideToast, autoHideMs);
+    }
+  }
+
+  function hideToast() {
+    if (toastAutoHideTimer) {
+      clearTimeout(toastAutoHideTimer);
+      toastAutoHideTimer = null;
+    }
+    const t = document.getElementById('toast');
+    if (!t) return;
+    t.style.opacity = '0';
+    t.style.display = 'none';
+    t.classList.remove('show');
+    t.classList.add('hidden');
+  }
+
+  // --- SAFE JSON POST HELPER (SUPPORTS OPTIONAL TTL CACHE & KEEP-ALIVE) ---
+  async function apiPost(payload, { cacheKey = '', cacheTtlMs = 0, keepalive = false } = {}) {
+    if (cacheKey && cacheTtlMs > 0 && apiCache.has(cacheKey)) {
+      const cached = apiCache.get(cacheKey);
+      if (Date.now() - cached.ts < cacheTtlMs) {
+        return cached.value;
+      }
+    }
+
     const res = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      keepalive
     });
     const rawText = await res.text();
     let json;
@@ -30,6 +82,9 @@
         location.reload();
       }
       throw new Error(msg);
+    }
+    if (cacheKey && cacheTtlMs > 0) {
+      apiCache.set(cacheKey, { ts: Date.now(), value: json });
     }
     return json;
   }
@@ -78,6 +133,7 @@
   let queuedSync = false;
   let localEquipRevision = 0;
   let equipSyncDebounce = null;
+  let progressSyncDebounce = null;
   let idleAnimFrame = 0;
   let actionAnimFrame = 0;
   let isPlayingAction = false;
@@ -605,20 +661,16 @@
       if (json.data.claimedPvpReward) {
         const rw = json.data.claimedPvpReward;
         playAnimeSFX('levelup');
-        showToast(`🏆 Daily PvP Rank #${rw.rank} Reward: +${rw.points} Gacha Points!`, "#10b981");
-        setTimeout(hideToast, 4200);
+        showToast(`🏆 Daily PvP Rank #${rw.rank} Reward: +${rw.points} Gacha Points!`, "#10b981", 4200);
       } else if (json.data.claimedGuildReward) {
         const gr = json.data.claimedGuildReward;
         playAnimeSFX('levelup');
-        showToast(`🏯 Guild Rank #${gr.rank} Reward: +${gr.points} Gacha Points!`, "#10b981");
-        setTimeout(hideToast, 4200);
+        showToast(`🏯 Guild Rank #${gr.rank} Reward: +${gr.points} Gacha Points!`, "#10b981", 4200);
         alert(`🏯 WEEKEND GUILD WAR REWARD!\n\nGuild: ${gr.guildName}\nFinal Rank: #${gr.rank}\nReward: +${gr.points} Gacha Points added to your balance!`);
       } else if (isWeekendBoostActive()) {
-        showToast("🔥 WEEKEND EVENT: 2x EXP, 2x LUCK & GUILD WARS OPEN!", "#f59e0b");
-        setTimeout(hideToast, 3400);
+        showToast("🔥 WEEKEND EVENT: 2x EXP, 2x LUCK & GUILD WARS OPEN!", "#f59e0b", 3400);
       } else {
-        showToast(`✅ Welcome back, ${hero.name}!`, "#10b981");
-        setTimeout(hideToast, 2000);
+        showToast(`✅ Welcome back, ${hero.name}!`, "#10b981", 2000);
       }
     } catch (err) {
       hideToast();
@@ -784,8 +836,7 @@
     hasUnsaved = true;
     if (leveledUp) {
       playAnimeSFX('levelup');
-      showToast(`🎉 LEVEL UP! Hero reached Lv. ${hero.stats.level}!`, "#f59e0b");
-      setTimeout(hideToast, 2000);
+      showToast(`🎉 LEVEL UP! Hero reached Lv. ${hero.stats.level}!`, "#f59e0b", 2000);
     }
     return leveledUp;
   }
@@ -893,6 +944,7 @@
               if (hero.towerFloor > 1) {
                 hero.towerFloor -= 1;
                 hasUnsaved = true;
+                scheduleProgressSync(5000);
               }
               resBox.innerHTML = `<span style="color:#fb7185;">⚠️ Enemy too strong — retreated to Floor ${hero.towerFloor} to farm EXP</span>`;
               resetCombatRound();
@@ -918,6 +970,7 @@
       hero.towerFloor++;
     }
     hasUnsaved = true;
+    scheduleProgressSync(6000);
 
     const weekendTag = isWeekend ? ` <b style="color:#fde047;">🔥[2x WEEKEND]</b>` : '';
     resBox.innerHTML = `<span style="color:#38bdf8;">⚔️ +${expGain.toLocaleString()} EXP${weekendTag}! Advancing to Floor ${hero.towerFloor}...</span>`;
@@ -958,13 +1011,13 @@
       hero.avatar = json.data.avatar;
       hero.unspentPoints = Number(json.data.unspentPoints) || 0;
       enforceClientIntegrity();
+      invalidateCache(['tasks', 'pvp']);
 
       const luckBadge = isWeekendBoostActive() ? ` <b style="color:#fde047;">[🍀2x LUCK]</b>` : '';
       document.getElementById('gacha-result-log').innerHTML =
         `<span style="color:#e879f9;">🎉 ${escHtml(json.data.pullResults.join(' • '))}${luckBadge}</span>`;
 
-      showToast("✨ Hero Summoned!", "#9333ea");
-      setTimeout(hideToast, 1600);
+      showToast("✨ Hero Summoned!", "#9333ea", 1600);
       resetCombatRound();
       renderAll();
     } catch (err) {
@@ -979,8 +1032,17 @@
   function scheduleEquipSync() {
     if (equipSyncDebounce) clearTimeout(equipSyncDebounce);
     equipSyncDebounce = setTimeout(() => {
-      syncProgress(true);
-    }, 800);
+      syncProgress(true, true);
+    }, 1200);
+  }
+
+  function scheduleProgressSync(delayMs = 6000) {
+    if (progressSyncDebounce) clearTimeout(progressSyncDebounce);
+    progressSyncDebounce = setTimeout(() => {
+      if (hero && hasUnsaved && !isSyncing && !devToolsOpen) {
+        syncProgress(true, true);
+      }
+    }, delayMs);
   }
 
   function equipCharacter(assetId) {
@@ -991,6 +1053,7 @@
     hero.avatar.equippedChar = assetId;
     localEquipRevision++;
     hasUnsaved = true;
+    invalidateCache(['lb_tower']);
     resetCombatRound();
     renderAll();
     scheduleEquipSync();
@@ -1385,12 +1448,12 @@
   function startSafeAutoSyncLoop() {
     setInterval(() => {
       if (hero && hasUnsaved && !isSyncing && !devToolsOpen) {
-        syncProgress(true);
+        syncProgress(true, true);
       }
     }, 30000);
   }
 
-  async function syncProgress(silent = false) {
+  async function syncProgress(silent = false, softToast = false) {
     if (!hero || devToolsOpen) return;
     if (isSyncing) {
       queuedSync = true;
@@ -1409,7 +1472,9 @@
     const sentLevel = Number(hero.stats.level) || 1;
     const sentExp = Number(hero.stats.exp) || 0;
     const sentFloor = Number(hero.towerFloor) || 1;
+
     if (!silent) showToast("☁️ Syncing Hero...", "#0284c7");
+    else if (softToast) showToast("☁️ Auto-saving...", "#0284c7");
 
     try {
       const json = await apiPost(buildSaveStatePayloadObj());
@@ -1452,16 +1517,18 @@
         const best = json.data.newDrops[json.data.newDrops.length - 1];
         document.getElementById('raid-result').innerHTML =
           `<span style="color:#4ade80;">🎁 Loot Drop: [${escHtml(best.rarity)}] ${escHtml(best.name)} (+${best.power})!</span>`;
-      }
-
-      if (!silent) {
-        showToast("✅ Synced!", "#10b981");
-        setTimeout(hideToast, 1800);
+        showToast(`🎁 Loot Drop: [${best.rarity}] ${best.name}!`, "#10b981", 2600);
+      } else if (!silent) {
+        showToast("✅ Synced!", "#10b981", 1800);
+      } else if (softToast) {
+        showToast("✅ Saved", "#10b981", 1200);
       }
     } catch (err) {
       if (!silent) {
         hideToast();
         alert("Sync failed: " + err.message);
+      } else if (softToast) {
+        showToast("⚠️ Save retry queued", "#dc2626", 1800);
       }
     } finally {
       isSyncing = false;
@@ -1471,7 +1538,7 @@
       }
       if (queuedSync) {
         queuedSync = false;
-        setTimeout(() => syncProgress(true), 300);
+        setTimeout(() => syncProgress(true, false), 400);
       }
     }
   }
@@ -1480,10 +1547,13 @@
     if (!hero || !hasUnsaved || devToolsOpen) return;
     try {
       const payload = JSON.stringify(buildSaveStatePayloadObj());
-      if (navigator.sendBeacon) {
-        navigator.sendBeacon(API_URL, new Blob([payload], { type: 'text/plain;charset=utf-8' }));
-        hasUnsaved = false;
-      }
+      hasUnsaved = false;
+      fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: payload,
+        keepalive: true
+      }).catch(() => {});
     } catch (_) {}
   }
 
@@ -1517,13 +1587,19 @@
     const list = document.getElementById('leaderboard-list');
     if (!list || !hero) return;
 
+    const cacheKey = `lb_tower_${hero.classId}`;
+    const hasCache = apiCache.has(cacheKey);
+    if (!hasCache) {
+      list.innerHTML = '<p style="text-align:center; color:var(--muted); font-size:12px; padding:10px;">Loading ranking...</p>';
+    }
+
     try {
       const json = await apiPost({
         action: 'getLeaderboard',
         token: sessionToken,
         studentId: hero.studentId,
         classId: hero.classId
-      });
+      }, { cacheKey, cacheTtlMs: 25000 });
 
       const ranks = json.data || [];
       if (ranks.length === 0) {
@@ -1558,14 +1634,16 @@
   async function loadGlobalPvpWinsLeaderboard(targetElementId = 'pvp-wins-leaderboard-list') {
     const list = document.getElementById(targetElementId);
     if (!list || !hero) return;
-    list.innerHTML = '<p style="text-align:center; color:var(--muted); font-size:12px; padding:12px;">Loading Global PvP Standings...</p>';
+    if (pvpPlayersCache.length === 0) {
+      list.innerHTML = '<p style="text-align:center; color:var(--muted); font-size:12px; padding:12px;">Loading Global PvP Standings...</p>';
+    }
 
     try {
       const json = await apiPost({
         action: 'getPvpData',
         token: sessionToken,
         studentId: hero.studentId
-      });
+      }, { cacheKey: 'pvp_data', cacheTtlMs: 20000 });
 
       handlePvpServerPayload(json.data);
 
@@ -1619,7 +1697,7 @@
 
   function startPointsRefreshLoop() {
     setInterval(async () => {
-      if (!hero) return;
+      if (!hero || document.visibilityState === 'hidden') return;
       try {
         const json = await apiPost({
           action: 'getStudentPoints',
@@ -1629,21 +1707,68 @@
         const livePts = Number(json.data.unspentPoints) || 0;
         if (livePts !== hero.unspentPoints) {
           hero.unspentPoints = livePts;
+          invalidateCache(['tasks']);
           renderAll();
-          showToast("⭐ New Gacha Points Received!", "#3b82f6");
-          setTimeout(hideToast, 2500);
+          showToast("⭐ New Gacha Points Received!", "#3b82f6", 2500);
         }
       } catch (_) {}
-    }, 15000);
+    }, 25000);
   }
 
   // --- 10. STUDENT TASK & MISSING WORK CHECKER ---
+  function renderTasksModalData(data) {
+    const body = document.getElementById('tasks-modal-body');
+    const { completed, missing, totalEarned } = data;
+    document.getElementById('tasks-total-earned').innerText = `${totalEarned} Pts`;
+
+    let html = '';
+
+    html += `<div style="font-size:12px; font-weight:900; color:#f87171; margin:6px 0 8px;">⚠️ MISSING TASKS (${missing.length})</div>`;
+    if (missing.length === 0) {
+      html += `<div class="rpg-card" style="text-align:center; color:#4ade80; font-size:12px; margin-bottom:14px; border-color:#065f46;">🎉 No missing tasks! You are all caught up!</div>`;
+    } else {
+      html += missing.map(m => `
+        <div class="rpg-card" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-color:#991b1b; background:rgba(153,27,27,0.18);">
+          <div>
+            <div style="font-weight:800; font-size:13px; color:#fca5a5;">❌ ${escHtml(m.taskName)}</div>
+            <div style="font-size:10px; color:var(--muted);">Assigned on ${escHtml(m.date)}</div>
+          </div>
+          <span style="background:#7f1d1d; color:#fecaca; font-size:11px; font-weight:800; padding:3px 8px; border-radius:8px;">Missing (${m.points} Pts)</span>
+        </div>
+      `).join('');
+    }
+
+    html += `<div style="font-size:12px; font-weight:900; color:#4ade80; margin:14px 0 8px;">✅ CREDITED TASKS (${completed.length})</div>`;
+    if (completed.length === 0) {
+      html += `<p style="text-align:center; color:var(--muted); font-size:12px; padding:12px;">No tasks credited yet.</p>`;
+    } else {
+      html += completed.map(c => `
+        <div class="rpg-card" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-color:#1e293b;">
+          <div>
+            <div style="font-weight:800; font-size:13px; color:#e2e8f0;">${escHtml(c.taskName)}</div>
+            <div style="font-size:10px; color:var(--muted);">${escHtml(c.date)}</div>
+          </div>
+          <span style="color:var(--gold); font-weight:900; font-size:13px;">+${c.points} Pts</span>
+        </div>
+      `).join('');
+    }
+
+    body.innerHTML = html;
+  }
+
   async function openTasksModal() {
     if (!hero) return;
     const modal = document.getElementById('tasks-modal');
     const body = document.getElementById('tasks-modal-body');
     document.getElementById('tasks-unspent').innerText = `${hero.unspentPoints} Pts`;
-    body.innerHTML = '<p style="text-align:center; color:var(--muted); padding:20px;">Checking class records...</p>';
+
+    const cacheKey = `tasks_${hero.classId}_${hero.studentId}`;
+    const cached = apiCache.get(cacheKey);
+    if (cached) {
+      renderTasksModalData(cached.value.data);
+    } else {
+      body.innerHTML = '<p style="text-align:center; color:var(--muted); padding:20px;">Checking class records...</p>';
+    }
     modal.classList.remove('hidden');
 
     try {
@@ -1652,46 +1777,13 @@
         token: sessionToken,
         classId: hero.classId,
         studentId: hero.studentId
-      });
+      }, { cacheKey, cacheTtlMs: 30000 });
 
-      const { completed, missing, totalEarned } = json.data;
-      document.getElementById('tasks-total-earned').innerText = `${totalEarned} Pts`;
-
-      let html = '';
-
-      html += `<div style="font-size:12px; font-weight:900; color:#f87171; margin:6px 0 8px;">⚠️ MISSING TASKS (${missing.length})</div>`;
-      if (missing.length === 0) {
-        html += `<div class="rpg-card" style="text-align:center; color:#4ade80; font-size:12px; margin-bottom:14px; border-color:#065f46;">🎉 No missing tasks! You are all caught up!</div>`;
-      } else {
-        html += missing.map(m => `
-          <div class="rpg-card" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-color:#991b1b; background:rgba(153,27,27,0.18);">
-            <div>
-              <div style="font-weight:800; font-size:13px; color:#fca5a5;">❌ ${escHtml(m.taskName)}</div>
-              <div style="font-size:10px; color:var(--muted);">Assigned on ${escHtml(m.date)}</div>
-            </div>
-            <span style="background:#7f1d1d; color:#fecaca; font-size:11px; font-weight:800; padding:3px 8px; border-radius:8px;">Missing (${m.points} Pts)</span>
-          </div>
-        `).join('');
-      }
-
-      html += `<div style="font-size:12px; font-weight:900; color:#4ade80; margin:14px 0 8px;">✅ CREDITED TASKS (${completed.length})</div>`;
-      if (completed.length === 0) {
-        html += `<p style="text-align:center; color:var(--muted); font-size:12px; padding:12px;">No tasks credited yet.</p>`;
-      } else {
-        html += completed.map(c => `
-          <div class="rpg-card" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-color:#1e293b;">
-            <div>
-              <div style="font-weight:800; font-size:13px; color:#e2e8f0;">${escHtml(c.taskName)}</div>
-              <div style="font-size:10px; color:var(--muted);">${escHtml(c.date)}</div>
-            </div>
-            <span style="color:var(--gold); font-weight:900; font-size:13px;">+${c.points} Pts</span>
-          </div>
-        `).join('');
-      }
-
-      body.innerHTML = html;
+      renderTasksModalData(json.data);
     } catch (err) {
-      body.innerHTML = `<p style="text-align:center; color:#f87171; padding:20px;">Error: ${escHtml(err.message)}</p>`;
+      if (!cached) {
+        body.innerHTML = `<p style="text-align:center; color:#f87171; padding:20px;">Error: ${escHtml(err.message)}</p>`;
+      }
     }
   }
 
@@ -1716,8 +1808,7 @@
     if (data.claimedPvpReward) {
       const rw = data.claimedPvpReward;
       playAnimeSFX('levelup');
-      showToast(`🏆 Daily PvP Rank #${rw.rank} Reward: +${rw.points} Gacha Points!`, "#10b981");
-      setTimeout(hideToast, 4200);
+      showToast(`🏆 Daily PvP Rank #${rw.rank} Reward: +${rw.points} Gacha Points!`, "#10b981", 4200);
     }
   }
 
@@ -1814,79 +1905,90 @@
     document.getElementById('pvp-my-record').innerText = `${hero.avatar.pvpWins || 0}W - ${hero.avatar.pvpLosses || 0}L`;
   }
 
+  function renderPvpLobbyList() {
+    const list = document.getElementById('pvp-global-list');
+    updatePvpHeaderSummary();
+    const defeatedSet = new Set((hero.avatar.defeatedOpponents || []).map(String));
+
+    const rewardBannerHtml = `
+      <div class="pvp-status-bar" style="justify-content:center; text-align:center; border-color:rgba(245,158,11,0.45); color:#fde68a; font-size:11px;">
+        <div>
+          ⚖️ <b>Anti-Tie PvP Rules:</b> <span style="color:#4ade80;">Win = +10 Net Pts</span> • <span style="color:#f87171;">Loss = -6 Net Pts</span><br>
+          ⏰ <b>Midnight Payout:</b> 👑 1st: <b>+100</b> • 🥈 2nd: <b>+90</b> • 🥉 3rd: <b>+75</b> • Others: <b>+50 Gacha Pts</b>
+        </div>
+      </div>
+    `;
+
+    if (pvpPlayersCache.length === 0) {
+      list.innerHTML = rewardBannerHtml + '<p style="text-align:center; color:#cbd5e1; padding:20px;">No players with heroes found yet.</p>';
+      return;
+    }
+
+    list.innerHTML = rewardBannerHtml + pvpPlayersCache.map((p, idx) => {
+      const medal = idx === 0 ? '👑' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
+      const isMe = String(p.studentId) === String(hero.studentId);
+      const isDefeated = defeatedSet.has(String(p.studentId));
+      const netScore = getPvpNetScore(p.wins, p.losses);
+      const netSign = netScore >= 0 ? `+${netScore}` : `${netScore}`;
+      const netColor = netScore >= 0 ? '#38bdf8' : '#f87171';
+
+      const squadThumbs = p.squad.map(sq => {
+        const asset = (hero.assets || []).find(a => a.assetId === sq.assetId);
+        return asset ? `<div style="width:30px; height:30px; border-radius:6px; border:1px solid #475569; background-color:#090d16; ${getThumbSpriteStyle(asset)}" title="${escHtml(sq.name)}"></div>` : '';
+      }).join('');
+
+      let actionBadge = '';
+      if (isMe) {
+        actionBadge = `<span style="font-size:11px; font-weight:900; color:var(--gold);">YOU</span>`;
+      } else if (isDefeated) {
+        actionBadge = `<button class="pvp-won-btn" disabled>✓ Won Today</button>`;
+      } else {
+        actionBadge = `<button class="pvp-fight-btn" onclick="startPvpBattle('${escHtml(p.studentId)}')">⚔️ Fight</button>`;
+      }
+
+      return `
+        <div class="pvp-challenger-card" style="${isMe ? 'border-color:var(--gold); background:rgba(245,158,11,0.18);' : isDefeated ? 'border-color:rgba(52,211,153,0.45);' : ''}">
+          <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+            <span style="font-size:16px; font-weight:900; min-width:28px; text-align:center; color:${idx < 3 ? 'var(--gold)' : '#cbd5e1'};">${medal}</span>
+            <div style="min-width:0;">
+              <div style="font-weight:900; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                ${escHtml(p.name)} <span style="font-size:11px; color:#38bdf8;">[${escHtml(p.className)}]</span>
+              </div>
+              <div style="font-size:11px; color:#e2e8f0; margin-bottom:5px;">
+                <b style="color:#4ade80;">${p.wins}W</b>-<b style="color:#f87171;">${p.losses}L</b> • <b style="color:${netColor};">${netSign} Net</b> • ⭐ ${p.pvpPoints} • ${p.teamCP.toLocaleString()} CP
+              </div>
+              <div style="display:flex; gap:5px;">${squadThumbs}</div>
+            </div>
+          </div>
+          ${actionBadge}
+        </div>
+      `;
+    }).join('');
+  }
+
   async function loadPvpLobby() {
     const list = document.getElementById('pvp-global-list');
     updatePvpHeaderSummary();
-    list.innerHTML = '<p style="text-align:center; color:#cbd5e1; padding:20px;">Loading Global Challengers across all classes...</p>';
+
+    if (pvpPlayersCache.length > 0) {
+      renderPvpLobbyList();
+    } else {
+      list.innerHTML = '<p style="text-align:center; color:#cbd5e1; padding:20px;">Loading Global Challengers across all classes...</p>';
+    }
 
     try {
       const json = await apiPost({
         action: 'getPvpData',
         token: sessionToken,
         studentId: hero.studentId
-      });
+      }, { cacheKey: 'pvp_data', cacheTtlMs: 20000 });
 
       handlePvpServerPayload(json.data);
-      updatePvpHeaderSummary();
-
-      const defeatedSet = new Set((hero.avatar.defeatedOpponents || []).map(String));
-
-      const rewardBannerHtml = `
-        <div class="pvp-status-bar" style="justify-content:center; text-align:center; border-color:rgba(245,158,11,0.45); color:#fde68a; font-size:11px;">
-          <div>
-            ⚖️ <b>Anti-Tie PvP Rules:</b> <span style="color:#4ade80;">Win = +10 Net Pts</span> • <span style="color:#f87171;">Loss = -6 Net Pts</span><br>
-            ⏰ <b>Midnight Payout:</b> 👑 1st: <b>+100</b> • 🥈 2nd: <b>+90</b> • 🥉 3rd: <b>+75</b> • Others: <b>+50 Gacha Pts</b>
-          </div>
-        </div>
-      `;
-
-      if (pvpPlayersCache.length === 0) {
-        list.innerHTML = rewardBannerHtml + '<p style="text-align:center; color:#cbd5e1; padding:20px;">No players with heroes found yet.</p>';
-        return;
-      }
-
-      list.innerHTML = rewardBannerHtml + pvpPlayersCache.map((p, idx) => {
-        const medal = idx === 0 ? '👑' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
-        const isMe = String(p.studentId) === String(hero.studentId);
-        const isDefeated = defeatedSet.has(String(p.studentId));
-        const netScore = getPvpNetScore(p.wins, p.losses);
-        const netSign = netScore >= 0 ? `+${netScore}` : `${netScore}`;
-        const netColor = netScore >= 0 ? '#38bdf8' : '#f87171';
-
-        const squadThumbs = p.squad.map(sq => {
-          const asset = (hero.assets || []).find(a => a.assetId === sq.assetId);
-          return asset ? `<div style="width:30px; height:30px; border-radius:6px; border:1px solid #475569; background-color:#090d16; ${getThumbSpriteStyle(asset)}" title="${escHtml(sq.name)}"></div>` : '';
-        }).join('');
-
-        let actionBadge = '';
-        if (isMe) {
-          actionBadge = `<span style="font-size:11px; font-weight:900; color:var(--gold);">YOU</span>`;
-        } else if (isDefeated) {
-          actionBadge = `<button class="pvp-won-btn" disabled>✓ Won Today</button>`;
-        } else {
-          actionBadge = `<button class="pvp-fight-btn" onclick="startPvpBattle('${escHtml(p.studentId)}')">⚔️ Fight</button>`;
-        }
-
-        return `
-          <div class="pvp-challenger-card" style="${isMe ? 'border-color:var(--gold); background:rgba(245,158,11,0.18);' : isDefeated ? 'border-color:rgba(52,211,153,0.45);' : ''}">
-            <div style="display:flex; align-items:center; gap:10px; min-width:0;">
-              <span style="font-size:16px; font-weight:900; min-width:28px; text-align:center; color:${idx < 3 ? 'var(--gold)' : '#cbd5e1'};">${medal}</span>
-              <div style="min-width:0;">
-                <div style="font-weight:900; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                  ${escHtml(p.name)} <span style="font-size:11px; color:#38bdf8;">[${escHtml(p.className)}]</span>
-                </div>
-                <div style="font-size:11px; color:#e2e8f0; margin-bottom:5px;">
-                  <b style="color:#4ade80;">${p.wins}W</b>-<b style="color:#f87171;">${p.losses}L</b> • <b style="color:${netColor};">${netSign} Net</b> • ⭐ ${p.pvpPoints} • ${p.teamCP.toLocaleString()} CP
-                </div>
-                <div style="display:flex; gap:5px;">${squadThumbs}</div>
-              </div>
-            </div>
-            ${actionBadge}
-          </div>
-        `;
-      }).join('');
+      renderPvpLobbyList();
     } catch (err) {
-      list.innerHTML = `<p style="text-align:center; color:#f87171; padding:20px;">Error: ${escHtml(err.message)}</p>`;
+      if (pvpPlayersCache.length === 0) {
+        list.innerHTML = `<p style="text-align:center; color:#f87171; padding:20px;">Error: ${escHtml(err.message)}</p>`;
+      }
     }
   }
 
@@ -1944,7 +2046,12 @@
 
   async function savePvpSquad() {
     if (draftSquadIds.length === 0) return alert("Pick at least 1 hero for your squad!");
+    hero.avatar.pvpSquad = draftSquadIds.slice(0, 3);
+    enforceClientIntegrity();
+    invalidateCache(['pvp_data']);
     showToast("💾 Saving 3v3 Squad...", "#0284c7");
+    switchPvpTab('lobby');
+
     try {
       const json = await apiPost({
         action: 'savePvpSquad',
@@ -1955,9 +2062,7 @@
 
       hero.avatar.pvpSquad = json.data.pvpSquad;
       enforceClientIntegrity();
-      showToast("✅ Squad Saved!", "#10b981");
-      setTimeout(hideToast, 1400);
-      switchPvpTab('lobby');
+      showToast("✅ Squad Saved!", "#10b981", 1400);
       loadPvpLobby();
     } catch (err) {
       hideToast();
@@ -2341,17 +2446,18 @@
     pvpBattle.finished = true;
     clearPvpActionTimers();
     const prevPvpPts = Number(hero.avatar.pvpPoints) || 1000;
+    const oppId = pvpBattle.opponentId;
     renderPvpBattleUI();
 
     document.getElementById('pvp-battle-log').innerHTML =
-      `<span style="color:#38bdf8; font-weight:900;">⚔️ Verifying Match Result with Server...</span>`;
+      `<span style="color:#38bdf8; font-weight:900;">⚔️ Recording Match Result...</span>`;
 
     try {
       const json = await apiPost({
         action: 'recordPvpResult',
         token: sessionToken,
         studentId: hero.studentId,
-        opponentId: pvpBattle.opponentId,
+        opponentId: oppId,
         won: clientWon
       });
 
@@ -2362,6 +2468,7 @@
       if (Array.isArray(json.data.defeatedOpponents)) {
         hero.avatar.defeatedOpponents = json.data.defeatedOpponents.map(String);
       }
+      invalidateCache(['pvp_data']);
 
       const ratingDelta = (Number(json.data.pvpPoints) || prevPvpPts) - prevPvpPts;
       const ratingStr = ratingDelta >= 0 ? `+${ratingDelta}` : `${ratingDelta}`;
@@ -2377,9 +2484,9 @@
         serverWon
           ? `🏆 Victory! +10 Net (${netStr} Total) • ${ratingStr} Rating`
           : `💀 Defeat! -6 Net (${netStr} Total) • ${ratingStr} Rating`,
-        serverWon ? "#10b981" : "#dc2626"
+        serverWon ? "#10b981" : "#dc2626",
+        2600
       );
-      setTimeout(hideToast, 2600);
       refreshActiveLeaderboard();
     } catch (err) {
       alert("PvP Record Error: " + err.message);
@@ -2389,7 +2496,7 @@
       pvpBattle = null;
       switchPvpTab('lobby');
       loadPvpLobby();
-    }, 1600);
+    }, 900);
   }
 
   // --- 12. GUILD HALL, LIVE COC-STYLE WAR TIMER & WEEKEND 3v3 GUILD WAR ---
@@ -2534,48 +2641,62 @@
     closeAllDrawers();
   }
 
-  async function loadGuildHub() {
-    const body = document.getElementById('guild-hub-body');
+  function applyGuildHubData() {
+    if (!guildHubCache) return;
     const statusEl = document.getElementById('guild-event-status');
     const cdBanner = document.getElementById('guild-cooldown-banner');
-    body.innerHTML = '<p style="text-align:center; color:#cbd5e1; padding:20px;">Loading Guilds...</p>';
+
+    updateGuildWarCountdownDisplay();
+
+    if (guildHubCache.unspentPoints !== undefined) {
+      hero.unspentPoints = Number(guildHubCache.unspentPoints) || 0;
+      renderAll();
+    }
+
+    if (guildHubCache.claimedGuildReward) {
+      const gr = guildHubCache.claimedGuildReward;
+      guildHubCache.claimedGuildReward = null;
+      playAnimeSFX('levelup');
+      alert(`🏯 WEEKEND GUILD WAR REWARD!\n\nGuild: ${gr.guildName}\nFinal Rank: #${gr.rank}\nReward: +${gr.points} Gacha Points added to your balance!`);
+    }
+
+    statusEl.innerHTML = guildHubCache.isWeekend
+      ? `<span style="color:#4ade80; font-weight:900;">🔥 WEEKEND WAR ACTIVE! Win 3v3 battles to steal 25% of a defender's Guild Pts!</span>`
+      : `<span style="color:#fbbf24;">⏳ Guild Battles open every Saturday &amp; Sunday • Max 20 Members</span>`;
+
+    if (guildHubCache.cooldownRemainingMs > 0) {
+      const mins = Math.ceil(guildHubCache.cooldownRemainingMs / 60000);
+      cdBanner.classList.remove('hidden');
+      cdBanner.innerText = `⏳ Guild Leave Cooldown Active: You can join or create a guild in ${mins} minute(s).`;
+    } else {
+      cdBanner.classList.add('hidden');
+    }
+
+    renderGuildHub();
+  }
+
+  async function loadGuildHub() {
+    const body = document.getElementById('guild-hub-body');
+
+    if (guildHubCache) {
+      applyGuildHubData();
+    } else {
+      body.innerHTML = '<p style="text-align:center; color:#cbd5e1; padding:20px;">Loading Guilds...</p>';
+    }
 
     try {
       const json = await apiPost({
         action: 'getGuildHub',
         token: sessionToken,
         studentId: hero.studentId
-      });
+      }, { cacheKey: 'guild_hub', cacheTtlMs: 20000 });
 
       guildHubCache = json.data;
-      updateGuildWarCountdownDisplay();
-
-      if (guildHubCache.unspentPoints !== undefined) {
-        hero.unspentPoints = Number(guildHubCache.unspentPoints) || 0;
-        renderAll();
-      }
-
-      if (guildHubCache.claimedGuildReward) {
-        const gr = guildHubCache.claimedGuildReward;
-        playAnimeSFX('levelup');
-        alert(`🏯 WEEKEND GUILD WAR REWARD!\n\nGuild: ${gr.guildName}\nFinal Rank: #${gr.rank}\nReward: +${gr.points} Gacha Points added to your balance!`);
-      }
-
-      statusEl.innerHTML = guildHubCache.isWeekend
-        ? `<span style="color:#4ade80; font-weight:900;">🔥 WEEKEND WAR ACTIVE! Win 3v3 battles to steal 25% of a defender's Guild Pts!</span>`
-        : `<span style="color:#fbbf24;">⏳ Guild Battles open every Saturday &amp; Sunday • Max 20 Members</span>`;
-
-      if (guildHubCache.cooldownRemainingMs > 0) {
-        const mins = Math.ceil(guildHubCache.cooldownRemainingMs / 60000);
-        cdBanner.classList.remove('hidden');
-        cdBanner.innerText = `⏳ Guild Leave Cooldown Active: You can join or create a guild in ${mins} minute(s).`;
-      } else {
-        cdBanner.classList.add('hidden');
-      }
-
-      renderGuildHub();
+      applyGuildHubData();
     } catch (err) {
-      body.innerHTML = `<p style="text-align:center; color:#f87171; padding:20px;">Error: ${escHtml(err.message)}</p>`;
+      if (!guildHubCache) {
+        body.innerHTML = `<p style="text-align:center; color:#f87171; padding:20px;">Error: ${escHtml(err.message)}</p>`;
+      }
     }
   }
 
@@ -2811,9 +2932,9 @@
     try {
       const json = await apiPost({ action: 'createGuild', token: sessionToken, studentId: hero.studentId, name, emblem, motto });
       guildHubCache = json.data;
+      invalidateCache(['guild_hub']);
       newGuildPhotoDataUrl = '';
-      showToast("✅ Guild Founded!", "#10b981");
-      setTimeout(hideToast, 1600);
+      showToast("✅ Guild Founded!", "#10b981", 1600);
       renderGuildHub();
     } catch (err) {
       hideToast();
@@ -2826,8 +2947,8 @@
     try {
       const json = await apiPost({ action: 'requestJoinGuild', token: sessionToken, studentId: hero.studentId, guildId });
       guildHubCache = json.data;
-      showToast("✅ Request Sent! Awaiting Owner Approval.", "#10b981");
-      setTimeout(hideToast, 2200);
+      invalidateCache(['guild_hub']);
+      showToast("✅ Request Sent! Awaiting Owner Approval.", "#10b981", 2200);
       renderGuildHub();
     } catch (err) {
       hideToast();
@@ -2848,8 +2969,8 @@
         approve
       });
       guildHubCache = json.data;
-      showToast(approve ? "✅ Member Approved!" : "Request Declined", "#10b981");
-      setTimeout(hideToast, 1500);
+      invalidateCache(['guild_hub']);
+      showToast(approve ? "✅ Member Approved!" : "Request Declined", "#10b981", 1500);
       renderGuildHub();
     } catch (err) {
       hideToast();
@@ -2872,9 +2993,9 @@
         name, emblem, motto
       });
       guildHubCache = json.data;
+      invalidateCache(['guild_hub']);
       editGuildPhotoDataUrl = '';
-      showToast("✅ Guild Updated!", "#10b981");
-      setTimeout(hideToast, 1500);
+      showToast("✅ Guild Updated!", "#10b981", 1500);
       renderGuildHub();
     } catch (err) {
       hideToast();
@@ -2889,9 +3010,9 @@
     try {
       const json = await apiPost({ action: 'leaveGuild', token: sessionToken, studentId: hero.studentId });
       guildHubCache = json.data;
-      showToast("Left Guild (1h Cooldown Active)", "#dc2626");
-      setTimeout(hideToast, 1800);
-      loadGuildHub();
+      invalidateCache(['guild_hub']);
+      showToast("Left Guild (1h Cooldown Active)", "#dc2626", 1800);
+      applyGuildHubData();
     } catch (err) {
       hideToast();
       alert(err.message);
@@ -2911,8 +3032,8 @@
         targetStudentId
       });
       guildHubCache = json.data;
-      showToast("Member Removed", "#10b981");
-      setTimeout(hideToast, 1500);
+      invalidateCache(['guild_hub']);
+      showToast("Member Removed", "#10b981", 1500);
       renderGuildHub();
     } catch (err) {
       hideToast();
@@ -2984,13 +3105,15 @@
     if (!pvpBattle || pvpBattle.finished) return;
     pvpBattle.finished = true;
     clearPvpActionTimers();
+    const matchId = pvpBattle.matchId;
+    const startedAt = pvpBattle.startedAt || 0;
     renderPvpBattleUI();
 
     document.getElementById('pvp-battle-log').innerHTML =
       `<span style="color:#38bdf8; font-weight:900;">🏯 Verifying Guild War Result with Server...</span>`;
 
     // Ensure minimum 3.5s battle duration required by server anti-skip guard
-    const elapsed = Date.now() - (pvpBattle.startedAt || 0);
+    const elapsed = Date.now() - startedAt;
     if (elapsed < 3600) {
       await new Promise(r => setTimeout(r, 3600 - elapsed));
     }
@@ -3000,12 +3123,13 @@
         action: 'finishGuildBattle',
         token: sessionToken,
         studentId: hero.studentId,
-        matchId: pvpBattle.matchId,
+        matchId: matchId,
         won: clientWon
       });
 
       const serverWon = Boolean(json.data.won);
       if (json.data.hub) guildHubCache = json.data.hub;
+      invalidateCache(['guild_hub']);
       const ptsDelta = Number(json.data.stolenPoints) || 0;
 
       document.getElementById('pvp-battle-log').innerHTML = serverWon
@@ -3014,11 +3138,10 @@
 
       if (serverWon) {
         playAnimeSFX('levelup');
-        showToast(`🏆 Guild Victory! Stole +${ptsDelta} Guild War Points!`, "#10b981");
+        showToast(`🏆 Guild Victory! Stole +${ptsDelta} Guild War Points!`, "#10b981", 2800);
       } else {
-        showToast(`💀 Guild Defeat! Lost -${ptsDelta} Guild War Points.`, "#dc2626");
+        showToast(`💀 Guild Defeat! Lost -${ptsDelta} Guild War Points.`, "#dc2626", 2800);
       }
-      setTimeout(hideToast, 2800);
     } catch (err) {
       alert("Guild War Record Error: " + err.message);
     }
@@ -3027,31 +3150,10 @@
       pvpBattle = null;
       document.getElementById('pvp-modal').classList.add('hidden');
       openGuildModal();
-    }, 1600);
+    }, 900);
   }
 
-  // --- 13. TOAST HELPERS & GLOBAL EXPORTS ---
-  function showToast(msg, bg = '#1e293b') {
-    const t = document.getElementById('toast');
-    if (!t) return;
-    t.innerText = msg;
-    t.style.background = bg;
-    t.style.display = 'block';
-    t.style.opacity = '1';
-    t.style.zIndex = '99999';
-    t.classList.remove('hidden');
-    t.classList.add('show');
-  }
-
-  function hideToast() {
-    const t = document.getElementById('toast');
-    if (!t) return;
-    t.style.opacity = '0';
-    t.style.display = 'none';
-    t.classList.remove('show');
-    t.classList.add('hidden');
-  }
-
+  // --- 13. GLOBAL EXPORTS ---
   Object.assign(window, {
     loginStudent,
     toggleAnimeBGM,
