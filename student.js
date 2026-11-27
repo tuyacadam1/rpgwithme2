@@ -1237,15 +1237,33 @@
     });
   }
 
+  let currentArmoryFilter = 'all';
+  let isDeletingGear = false;
+
   function openArmory(slotFilter) {
+    currentArmoryFilter = slotFilter || 'all';
     enforceClientIntegrity();
     const modal = document.getElementById('armory-modal');
     const list = document.getElementById('armory-items');
-    document.getElementById('armory-title').innerText = slotFilter === 'all' ? '🎒 All Gear' : `🎒 ${slotFilter.toUpperCase()} Slot`;
+    document.getElementById('armory-title').innerText =
+      currentArmoryFilter === 'all' ? `🎒 All Gear (${hero.inventory.length}/150)` : `🎒 ${currentArmoryFilter.toUpperCase()} Slot`;
 
-    const items = (slotFilter === 'all' ? hero.inventory : hero.inventory.filter(i => i.slot === slotFilter))
+    const items = (currentArmoryFilter === 'all'
+      ? hero.inventory
+      : hero.inventory.filter(i => i.slot === currentArmoryFilter))
       .slice()
       .sort((a, b) => b.power - a.power);
+
+    const unusedCount = items.filter(item => {
+      const eq = hero.equipped[item.slot];
+      return !(eq && eq.id === item.id);
+    }).length;
+
+    const bulkBtn = document.getElementById('delete-unused-gear-btn');
+    if (bulkBtn) {
+      bulkBtn.disabled = unusedCount === 0 || isDeletingGear;
+      bulkBtn.innerText = `🗑️ Clear Unused (${unusedCount})`;
+    }
 
     list.innerHTML = items.map(item => {
       const curEquipped = hero.equipped[item.slot];
@@ -1261,15 +1279,102 @@
               <div style="font-size:11px; color:var(--muted);">[${escHtml(item.rarity)}] ${escHtml(item.slot.toUpperCase())} • +${(item.power * 10).toLocaleString()} CP</div>
             </div>
           </div>
-          ${isEquipped
-            ? `<button class="plus-btn" disabled style="background:#065f46; color:#6ee7b7; border:1px solid #10b981; cursor:default;">✓ EQUIPPED</button>`
-            : `<button class="plus-btn" onclick="equipGear('${escHtml(item.id)}')">EQUIP</button>`
-          }
+          <div style="display:flex; align-items:center; gap:6px;">
+            ${isEquipped
+              ? `<button class="plus-btn" disabled style="background:#065f46; color:#6ee7b7; border:1px solid #10b981; cursor:default;">✓ EQUIPPED</button>`
+              : `<button class="plus-btn" onclick="equipGear('${escHtml(item.id)}')">EQUIP</button>
+                 <button class="plus-btn" style="background:#7f1d1d; border:1px solid #ef4444; padding:6px 8px;" title="Delete Gear" onclick="deleteSingleGear('${escHtml(item.id)}')">🗑️</button>`
+            }
+          </div>
         </div>
       `;
     }).join('') || '<p style="text-align:center; color:var(--muted); padding:20px;">No gear unlocked yet. Clear floors or click ☁️ Sync to claim loot drops!</p>';
 
     modal.classList.remove('hidden');
+  }
+
+  async function deleteGearItems(itemIds) {
+    if (!hero || isDeletingGear || !Array.isArray(itemIds) || itemIds.length === 0) return;
+
+    // Flush any pending equip sync so the server has the latest EquippedJSON before deleting
+    if (equipSyncDebounce) {
+      clearTimeout(equipSyncDebounce);
+      equipSyncDebounce = null;
+      await syncProgress(true);
+    }
+
+    const equippedIds = new Set(
+      VALID_GEAR_SLOTS
+        .map(slot => hero.equipped[slot]?.id)
+        .filter(Boolean)
+        .map(String)
+    );
+    const safeIds = itemIds.map(String).filter(id => !equippedIds.has(id));
+    if (safeIds.length === 0) {
+      return alert("Equipped items cannot be deleted.");
+    }
+
+    isDeletingGear = true;
+    showToast("🗑️ Deleting unused gear...", "#dc2626");
+
+    try {
+      const json = await apiPost({
+        action: 'deleteGear',
+        token: sessionToken,
+        studentId: hero.studentId,
+        itemIds: safeIds
+      });
+
+      storeVerifiedInventory(json.data.inventory);
+      if (json.data.equipped) {
+        hero.equipped = json.data.equipped;
+      }
+      enforceClientIntegrity();
+      renderAll();
+      openArmory(currentArmoryFilter);
+
+      showToast(`🗑️ Deleted ${json.data.deletedCount} item(s).`, "#10b981", 1800);
+    } catch (err) {
+      hideToast();
+      alert("Delete Error: " + err.message);
+    } finally {
+      isDeletingGear = false;
+      if (!document.getElementById('armory-modal').classList.contains('hidden')) {
+        openArmory(currentArmoryFilter);
+      }
+    }
+  }
+
+  function deleteSingleGear(itemId) {
+    const item = verifiedInventorySnapshot.find(i => i.id === String(itemId));
+    if (!item) return;
+    if (!confirm(`Delete "${item.name}" (+${item.power * 10} CP)? This cannot be undone.`)) return;
+    deleteGearItems([item.id]);
+  }
+
+  function deleteAllUnusedGear() {
+    enforceClientIntegrity();
+    const equippedIds = new Set(
+      VALID_GEAR_SLOTS
+        .map(slot => hero.equipped[slot]?.id)
+        .filter(Boolean)
+        .map(String)
+    );
+
+    const targetPool = currentArmoryFilter === 'all'
+      ? verifiedInventorySnapshot
+      : verifiedInventorySnapshot.filter(i => i.slot === currentArmoryFilter);
+
+    const unusedIds = targetPool
+      .filter(i => !equippedIds.has(String(i.id)))
+      .map(i => i.id);
+
+    if (unusedIds.length === 0) return;
+
+    const ok = confirm(`Delete all ${unusedIds.length} unequipped gear item(s) in this view? Equipped gear will NOT be deleted.`);
+    if (!ok) return;
+
+    deleteGearItems(unusedIds);
   }
 
   function closeArmory() { document.getElementById('armory-modal').classList.add('hidden'); }
@@ -3177,6 +3282,8 @@
     openArmory,
     closeArmory,
     equipGear,
+    deleteSingleGear,     
+    deleteAllUnusedGear,
     syncProgress,
     toggleMainLeaderboardMode,
     refreshActiveLeaderboard,
