@@ -1046,7 +1046,7 @@
   function scheduleEquipSync() {
     if (equipSyncDebounce) clearTimeout(equipSyncDebounce);
     equipSyncDebounce = setTimeout(() => {
-      syncProgress(true, true);
+      syncProgress(true);
     }, 1200);
   }
 
@@ -1054,7 +1054,7 @@
     if (progressSyncDebounce) clearTimeout(progressSyncDebounce);
     progressSyncDebounce = setTimeout(() => {
       if (hero && hasUnsaved && !isSyncing && !devToolsOpen) {
-        syncProgress(true, true);
+        syncProgress(true);
       }
     }, delayMs);
   }
@@ -1462,12 +1462,12 @@
   function startSafeAutoSyncLoop() {
     setInterval(() => {
       if (hero && hasUnsaved && !isSyncing && !devToolsOpen) {
-        syncProgress(true, true);
+        syncProgress(true);
       }
     }, 30000);
   }
 
-  async function syncProgress(silent = false, softToast = false) {
+  async function syncProgress(silent = false) {
     if (!hero || devToolsOpen) return;
     if (isSyncing) {
       queuedSync = true;
@@ -1488,7 +1488,6 @@
     const sentFloor = Number(hero.towerFloor) || 1;
 
     if (!silent) showToast("☁️ Syncing Hero...", "#0284c7");
-    else if (softToast) showToast("☁️ Auto-saving...", "#0284c7");
 
     try {
       const json = await apiPost(buildSaveStatePayloadObj());
@@ -1534,15 +1533,11 @@
         showToast(`🎁 Loot Drop: [${best.rarity}] ${best.name}!`, "#10b981", 2600);
       } else if (!silent) {
         showToast("✅ Synced!", "#10b981", 1800);
-      } else if (softToast) {
-        showToast("✅ Saved", "#10b981", 1200);
       }
     } catch (err) {
       if (!silent) {
         hideToast();
         alert("Sync failed: " + err.message);
-      } else if (softToast) {
-        showToast("⚠️ Save retry queued", "#dc2626", 1800);
       }
     } finally {
       isSyncing = false;
@@ -1552,7 +1547,7 @@
       }
       if (queuedSync) {
         queuedSync = false;
-        setTimeout(() => syncProgress(true, false), 400);
+        setTimeout(() => syncProgress(true), 400);
       }
     }
   }
