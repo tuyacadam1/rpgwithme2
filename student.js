@@ -181,8 +181,8 @@
   const RARITY_MULT = Object.freeze({ Common: 1.0, Rare: 1.2, Epic: 1.5, Legendary: 2.0, Secret: 2.6, Divine: 3.5 });
   const RARITY_ORDER = Object.freeze({ Divine: 1, Secret: 2, Legendary: 3, Epic: 4, Rare: 5, Common: 6 });
 
-  const MAX_ALLOWED_FLOOR = 500;
-  const MAX_ALLOWED_LEVEL = 500;
+  const MAX_ALLOWED_FLOOR = 200;
+  const MAX_ALLOWED_LEVEL = 5000;
   const MAX_ALLOWED_ITEM_POWER = 100000;
 
   // --- ANTI-TIE PVP NET SCORE HELPER (+10 per Win, -6 per Loss) ---
