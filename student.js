@@ -1373,7 +1373,7 @@
     const unusedIds = targetPool
       .filter(i => !equippedIds.has(String(i.id)))
       .map(i => i.id)
-      .slice(0, 150);
+      .slice(0, 60);
 
     if (unusedIds.length === 0) return;
 
