@@ -1634,6 +1634,7 @@
           int: lv
         },
         clears: pendingFloorClears,
+        farmingFloor: Math.max(1, Math.min(Number(hero.towerFloor) || 1, Math.floor(Number(farmingFloor) || 1))),
         towerFloor: Math.max(1, Math.floor(Number(hero.towerFloor) || 1)),
         equipped: cleanEquipped,
         equippedIds: equippedIds
