@@ -1512,8 +1512,9 @@ function getFloorDropRatesClient(floor) {
       if (Number(floorSel.dataset.maxBuilt) !== maxFl) {
         let opts = '';
         for (let f = maxFl; f >= 1; f--) {
+          const r = getFloorDropRatesClient(f);
           const tag = f % 10 === 0 ? `F${f} ★BOSS` : `F${f}`;
-          opts += `<option value="${f}">${tag}</option>`;
+          opts += `<option value="${f}">${tag} (Divine ${r.Divine}%)</option>`;
         }
         floorSel.innerHTML = opts;
         floorSel.dataset.maxBuilt = String(maxFl);
