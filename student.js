@@ -1612,9 +1612,11 @@
     const sentLevel = Number(hero.stats.level) || 1;
     const sentExp = Number(hero.stats.exp) || 0;
     const sentFloor = Number(hero.towerFloor) || 1;
+    const clearsToSync = pendingFloorClears;
 
     try {
       const json = await apiPost(buildSaveStatePayloadObj());
+      pendingFloorClears = Math.max(0, pendingFloorClears - clearsToSync);
 
       hero.unspentPoints = Number(json.data.unspentPoints) || 0;
       if (json.data.stats) mergeServerStatsMonotonic(json.data.stats);
