@@ -919,7 +919,7 @@
         return;
       }
 
-      const enemy = getFloorEnemy(hero.towerFloor);
+      const enemy = getFloorEnemy(farmingFloor);
       const myCP = getTotalCP();
       const heroSprite = document.getElementById('arena-hero-sprite');
       const enemySprite = document.getElementById('arena-enemy-sprite');
