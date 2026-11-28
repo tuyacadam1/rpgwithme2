@@ -1013,6 +1013,35 @@
     btn.style.borderColor = idlePaused ? '#facc15' : '#10b981';
     btn.style.color = idlePaused ? '#fde047' : '#4ade80';
   }
+  function selectFarmFloor(val) {
+    if (!hero) return;
+    enforceClientIntegrity();
+    const maxFl = Math.max(1, Number(hero.towerFloor) || 1);
+    const chosen = Math.max(1, Math.min(maxFl, Math.floor(Number(val) || maxFl)));
+    farmingFloor = chosen;
+    autoClimbEnabled = (chosen === maxFl);
+
+    if (autoClimbEnabled) {
+      localStorage.removeItem(`cq_farm_${hero.studentId}`);
+    } else {
+      localStorage.setItem(`cq_farm_${hero.studentId}`, String(chosen));
+    }
+
+    const resBox = document.getElementById('raid-result');
+    if (resBox) {
+      resBox.innerHTML = autoClimbEnabled
+        ? `<span style="color:#38bdf8;">⚔️ Climbing Highest Floor ${farmingFloor}...</span>`
+        : `<span style="color:#fde047;">🌾 Farming Floor ${farmingFloor} (Max Unlocked: F${maxFl})</span>`;
+    }
+
+    resetCombatRound();
+    renderAll();
+  }
+
+  function stepFarmFloor(delta) {
+    if (!hero) return;
+    selectFarmFloor((farmingFloor || hero.towerFloor) + delta);
+  }
 
   // --- 5. SERVER-AUTHORITATIVE GACHA SYSTEM ---
   let isRollingGacha = false;
