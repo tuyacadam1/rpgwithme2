@@ -1752,15 +1752,6 @@ function getFloorDropRatesClient(floor) {
       } else if (isManual) {
         showToast("✅ Synced!", "#10b981", 1800);
       }
-
-      if (json.data.newDrops && json.data.newDrops.length > 0) {
-        const best = json.data.newDrops[json.data.newDrops.length - 1];
-        document.getElementById('raid-result').innerHTML =
-          `<span style="color:#4ade80;">🎁 Loot Drop: [${escHtml(best.rarity)}] ${escHtml(best.name)} (+${best.power})!</span>`;
-        showToast(`🎁 Loot Drop: [${best.rarity}] ${best.name}!`, "#10b981", 2600);
-      } else if (isManual) {
-        showToast("✅ Synced!", "#10b981", 1800);
-      }
     } catch (err) {
       if (isManual) {
         hideToast();
