@@ -967,15 +967,14 @@
           setTimeout(() => {
             heroSprite.classList.remove('hit-flash');
 
-            if (heroHP <= 0) {
-              if (hero.towerFloor > 1) {
-                hero.towerFloor -= 1;
-                hasUnsaved = true;
-                scheduleProgressSync(5000);
-              }
-              resBox.innerHTML = `<span style="color:#fb7185;">⚠️ Enemy too strong — retreated to Floor ${hero.towerFloor} to farm EXP</span>`;
-              resetCombatRound();
-              renderAll();
+            if (farmingFloor > 1) {
+            farmingFloor -= 1;
+            autoClimbEnabled = false;
+            localStorage.setItem(`cq_farm_${hero.studentId}`, String(farmingFloor));
+           }
+            resBox.innerHTML = `<span style="color:#fb7185;">⚠️ Enemy too strong — farming Floor ${farmingFloor} (Max: F${hero.towerFloor})</span>`;
+            resetCombatRound();
+            renderAll();
             } else {
               idleTurn = 'hero';
             }
