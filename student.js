@@ -1481,7 +1481,17 @@
 
     updateHPBars();
   }
-
+function getFloorDropRatesClient(floor) {
+    const fl = Math.max(1, Math.min(200, Math.floor(Number(floor) || 1)));
+    const t = Math.min(1, (fl - 1) / 99);
+    const divine = Number((0.5 + t * 5.5).toFixed(1));
+    const secret = Number((1.5 + t * 8.5).toFixed(1));
+    const legendary = Number((4.0 + t * 14.0).toFixed(1));
+    const epic = Number((12.0 + t * 16.0).toFixed(1));
+    const rare = Number((30.0 - t * 2.0).toFixed(1));
+    const common = Number(Math.max(0, 100 - (divine + secret + legendary + epic + rare)).toFixed(1));
+    return { Divine: divine, Secret: secret, Legendary: legendary, Epic: epic, Rare: rare, Common: common };
+  }
   function renderAll() {
     enforceClientIntegrity();
     const charObj = getEquippedCharacterObj();
