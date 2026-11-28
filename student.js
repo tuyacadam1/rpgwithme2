@@ -661,6 +661,14 @@
       hero.stats.int = verifiedServerLevel;
 
       enforceClientIntegrity();
+      const savedFarm = Number(localStorage.getItem(`cq_farm_${hero.studentId}`));
+      if (savedFarm >= 1 && savedFarm < hero.towerFloor) {
+        farmingFloor = savedFarm;
+        autoClimbEnabled = false;
+      } else {
+        farmingFloor = hero.towerFloor;
+        autoClimbEnabled = true;
+      }
 
       (hero.assets || []).forEach(a => analyzeSpriteSheet(a));
 
