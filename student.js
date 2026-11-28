@@ -3365,6 +3365,8 @@
     openDrawer,
     closeAllDrawers,
     toggleIdlePause,
+    selectFarmFloor,
+    stepFarmFloor,
     rollGacha,
     equipCharacter,
     openCollection,
