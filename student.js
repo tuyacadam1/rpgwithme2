@@ -1251,8 +1251,7 @@
     enforceClientIntegrity();
     const modal = document.getElementById('armory-modal');
     const list = document.getElementById('armory-items');
-    document.getElementById('armory-title').innerText =
-      currentArmoryFilter === 'all' ? `🎒 All Gear (${hero.inventory.length}/150)` : `🎒 ${currentArmoryFilter.toUpperCase()} Slot`;
+    document.getElementById('armory-title').innerText = currentArmoryFilter === 'all' ? `🎒 All Gear (${hero.inventory.length}/60)` : `🎒 ${currentArmoryFilter.toUpperCase()} Slot`;
 
     const items = (currentArmoryFilter === 'all'
       ? hero.inventory
