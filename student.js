@@ -873,7 +873,7 @@
   // --- 4. TOWER BATTLE ---
   function resetCombatRound() {
     enforceClientIntegrity();
-    const enemy = getFloorEnemy(hero.towerFloor);
+    const enemy = getFloorEnemy(farmingFloor);
     heroMaxHP = Math.max(1, getTotalCP() * 3);
     heroHP = heroMaxHP;
     enemyMaxHP = enemy.reqCP * 3;
