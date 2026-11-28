@@ -5,7 +5,7 @@
   "description": "Student RPG Portal",
   "start_url": "/",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "landscape",
   "background_color": "#1a1a2e",
   "theme_color": "#1a1a2e",
   "icons": [
