@@ -164,6 +164,8 @@
   let enemyHP = 100;
   let enemyMaxHP = 100;
   let idleTurn = 'hero';
+  let farmingFloor = 1;
+  let autoClimbEnabled = true;
 
   // --- LEADERBOARD, 3v3 PVP & GUILD STATE ---
   let mainLbMode = 'tower';
