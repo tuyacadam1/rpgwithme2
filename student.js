@@ -187,7 +187,7 @@
   const MAX_ALLOWED_FLOOR = 200;
   const MAX_ALLOWED_LEVEL = 5000;
   const MAX_ALLOWED_ITEM_POWER = 100000;
-  const MAX_CHAR_STARS = 200;
+  const MAX_CHAR_STARS = 100;
 
   // --- ANTI-TIE PVP NET SCORE HELPER (+10 per Win, -6 per Loss) ---
   function getPvpNetScore(wins, losses) {
