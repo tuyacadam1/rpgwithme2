@@ -49,10 +49,15 @@
       </div>
 
       <!-- CENTER: FLOOR HUB -->
-      <div class="center-floor-hub">
+     <div class="center-floor-hub">
         <div class="floor-diamond">
-          <span class="floor-lbl">FLOOR</span>
-          <span id="hud-floor" class="floor-num">1</span>
+          <span class="floor-lbl">FLOOR <span id="hud-max-floor-tag" style="color:#fde047;"></span></span>
+          <div style="display:flex; align-items:center; justify-content:center; gap:6px;">
+            <button class="floor-step-btn" onclick="stepFarmFloor(-1)" title="Previous Floor">◀</button>
+            <select id="floor-select" class="floor-select" onchange="selectFarmFloor(this.value)" title="Select Floor to Farm"></select>
+            <button class="floor-step-btn" onclick="stepFarmFloor(1)" title="Next Floor">▶</button>
+          </div>
+          <span id="hud-floor" class="hidden">1</span>
         </div>
         <div class="hub-pills">
           <button id="pause-idle-btn" class="hub-pill pill-live" onclick="toggleIdlePause()">⏸ PAUSE</button>
