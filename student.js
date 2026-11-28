@@ -1461,7 +1461,7 @@
   }
 
   function renderArena() {
-    const enemy = getFloorEnemy(hero.towerFloor);
+    const enemy = getFloorEnemy(farmingFloor);
     const charObj = getEquippedCharacterObj();
 
     const enemyNameEl = document.getElementById('arena-enemy-name');
@@ -1469,7 +1469,7 @@
     enemyNameEl.title = enemy.asset.name;
 
     document.getElementById('arena-enemy-cp').innerText = enemy.reqCP.toLocaleString() + " CP";
-    document.getElementById('enemy-boss-badge').innerText = enemy.isBoss ? 'BOSS' : `F${hero.towerFloor}`;
+    document.getElementById('enemy-boss-badge').innerText = enemy.isBoss ? 'BOSS' : `F${farmingFloor}`;
 
     const heroPort = document.getElementById('hud-hero-portrait');
     if (charObj) applyPortraitCloseup(heroPort, charObj);
