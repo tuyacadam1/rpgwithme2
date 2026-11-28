@@ -3228,7 +3228,10 @@
       document.getElementById('pvp-battle-mode-tag').innerText = `🏯 GUILD WAR vs ${match.oppGuild.name}`;
       document.getElementById('pvp-b-myname').innerText = `${hero.name} [${match.myGuild.name}]`;
       document.getElementById('pvp-b-oppname').innerText = `${match.defenderName} [${match.oppGuild.name}]`;
-      document.getElementById('pvp-battle-log').innerText = `🏯 Guild War vs ${match.defenderName}! Win: +${match.potentialSteal} Guild Pts | Loss: -${match.potentialLoss} Guild Pts`;
+      const riskLabel = match.potentialLoss > 0
+        ? `Loss: -${match.potentialLoss} Guild Pts`
+        : `Loss: 0 Guild Pts (Comeback Battle!)`;
+      document.getElementById('pvp-battle-log').innerText = `🏯 Guild War vs ${match.defenderName}! Win: +${match.potentialSteal} Guild Pts | ${riskLabel}`;
 
       renderPvpBattleUI();
     } catch (err) {
