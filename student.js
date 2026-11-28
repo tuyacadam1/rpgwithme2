@@ -144,6 +144,7 @@
   let verifiedServerFloor = 1;
   let verifiedServerLevel = 1;
   let verifiedServerExp = 0;
+  let pendingFloorClears = 0;
   let verifiedInventorySnapshot = [];
   let lastCombatTickMs = 0;
   let hasUnsaved = false;
