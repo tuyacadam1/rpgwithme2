@@ -304,7 +304,7 @@
         if (hero) {
           const charObj = getEquippedCharacterObj();
           if (charObj) applyPortraitCloseup(document.getElementById('hud-hero-portrait'), charObj);
-          const enemy = getFloorEnemy(hero.towerFloor);
+          const enemy = getFloorEnemy(farmingFloor);
           if (enemy && enemy.asset) applyPortraitCloseup(document.getElementById('hud-enemy-portrait'), enemy.asset);
         }
         if (pvpBattle) renderPvpBattleUI();
