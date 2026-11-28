@@ -935,6 +935,7 @@
             enemySprite.classList.remove('hit-flash');
             if (enemyHP <= 0) {
               handleIdleVictory(enemy);
+              pendingFloorClears++;
             } else {
               idleTurn = 'enemy';
             }
@@ -1566,6 +1567,7 @@
           vit: lv,
           int: lv
         },
+        clears: pendingFloorClears,
         towerFloor: Math.max(1, Math.floor(Number(hero.towerFloor) || 1)),
         equipped: cleanEquipped,
         equippedIds: equippedIds
