@@ -1487,7 +1487,30 @@
     document.getElementById('hud-name').innerText = hero.name;
     document.getElementById('hud-level').innerText = hero.stats.level || 1;
     document.getElementById('hud-id').innerText = hero.studentId;
-    document.getElementById('hud-floor').innerText = hero.towerFloor;
+
+    // --- UPDATED FLOOR SELECTOR SYNC ---
+    const maxFl = Math.max(1, Number(hero.towerFloor) || 1);
+    if (farmingFloor > maxFl) farmingFloor = maxFl;
+    document.getElementById('hud-floor').innerText = farmingFloor;
+
+    const maxTag = document.getElementById('hud-max-floor-tag');
+    if (maxTag) maxTag.innerText = maxFl > 1 ? `(MAX ${maxFl})` : '';
+
+    const floorSel = document.getElementById('floor-select');
+    if (floorSel) {
+      if (Number(floorSel.dataset.maxBuilt) !== maxFl) {
+        let opts = '';
+        for (let f = maxFl; f >= 1; f--) {
+          const tag = f % 10 === 0 ? `F${f} ★BOSS` : `F${f}`;
+          opts += `<option value="${f}">${tag}</option>`;
+        }
+        floorSel.innerHTML = opts;
+        floorSel.dataset.maxBuilt = String(maxFl);
+      }
+      floorSel.value = String(farmingFloor);
+    }
+    // -----------------------------------
+
     document.getElementById('hud-cp').innerText = getTotalCP().toLocaleString();
     document.getElementById('hud-pts').innerText = hero.unspentPoints;
     document.getElementById('gacha-pts-display').innerText = hero.unspentPoints;
