@@ -777,7 +777,7 @@
     setInterval(() => {
       idleAnimFrame++;
       const charObj = getEquippedCharacterObj();
-      const enemyObj = getFloorEnemy(hero.towerFloor).asset;
+      const enemyObj = getFloorEnemy(farmingFloor).asset;
 
       if (charObj) {
         applySpriteFrame(document.getElementById('stage-hero-sprite'), charObj, idleAnimFrame, 0);
