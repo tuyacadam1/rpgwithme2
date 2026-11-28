@@ -187,6 +187,7 @@
   const MAX_ALLOWED_FLOOR = 200;
   const MAX_ALLOWED_LEVEL = 5000;
   const MAX_ALLOWED_ITEM_POWER = 100000;
+  const MAX_CHAR_STARS = 200;
 
   // --- ANTI-TIE PVP NET SCORE HELPER (+10 per Win, -6 per Loss) ---
   function getPvpNetScore(wins, losses) {
@@ -593,7 +594,7 @@
       .filter(u => u && validAssetIds.has(String(u.id)) && !seen.has(String(u.id)))
       .map(u => {
         seen.add(String(u.id));
-        const stars = Math.max(1, Math.floor(Number(u.stars) || 1));
+        const stars = Math.max(1, Math.min(MAX_CHAR_STARS, Math.floor(Number(u.stars) || 1)));
         return { id: String(u.id), stars };
       });
 
@@ -1078,11 +1079,17 @@
       enforceClientIntegrity();
       invalidateCache(['tasks', 'pvp']);
 
+      const refunded = Number(json.data.refundedPoints) || 0;
       const luckBadge = isWeekendBoostActive() ? ` <b style="color:#fde047;">[🍀2x LUCK]</b>` : '';
+      const refundBadge = refunded > 0 ? ` <b style="color:#4ade80;">[♻️ +${refunded} Pts Refunded]</b>` : '';
       document.getElementById('gacha-result-log').innerHTML =
-        `<span style="color:#e879f9;">🎉 ${escHtml(json.data.pullResults.join(' • '))}${luckBadge}</span>`;
+        `<span style="color:#e879f9;">🎉 ${escHtml(json.data.pullResults.join(' • '))}${luckBadge}${refundBadge}</span>`;
 
-      showToast("✨ Hero Summoned!", "#9333ea", 1600);
+      showToast(
+        refunded > 0 ? `✨ Summoned! (+${refunded} Pts Max-Star Refund)` : "✨ Hero Summoned!",
+        "#9333ea",
+        2000
+      );
       resetCombatRound();
     } catch (err) {
       hideToast();
