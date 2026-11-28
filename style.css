@@ -1448,3 +1448,10 @@ body {
     font-size: 9px;
   }
 }
+button, a, [role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+}
