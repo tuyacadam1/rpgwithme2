@@ -985,25 +985,29 @@
   }
 
   function handleIdleVictory(enemy) {
-    const resBox = document.getElementById('raid-result');
-    const clearedFloor = hero.towerFloor;
-    const isWeekend = isWeekendBoostActive();
+  const resBox = document.getElementById('raid-result');
+  const clearedFloor = farmingFloor;
+  const isWeekend = isWeekendBoostActive();
 
-    const expGain = getFloorExpReward(clearedFloor, enemy.isBoss);
-    grantTowerExp(expGain);
+  const expGain = getFloorExpReward(clearedFloor, enemy.isBoss);
+  grantTowerExp(expGain);
 
-    if (hero.towerFloor < MAX_ALLOWED_FLOOR) {
-      hero.towerFloor++;
-    }
-    hasUnsaved = true;
-    scheduleProgressSync(6000);
-
-    const weekendTag = isWeekend ? ` <b style="color:#fde047;">🔥[2x WEEKEND]</b>` : '';
-    resBox.innerHTML = `<span style="color:#38bdf8;">⚔️ +${expGain.toLocaleString()} EXP${weekendTag}! Advancing to Floor ${hero.towerFloor}...</span>`;
-
-    resetCombatRound();
-    renderAll();
+  if (autoClimbEnabled && farmingFloor >= hero.towerFloor && hero.towerFloor < MAX_ALLOWED_FLOOR) {
+    hero.towerFloor++;
+    farmingFloor = hero.towerFloor;
   }
+  hasUnsaved = true;
+  scheduleProgressSync(6000);
+
+  const weekendTag = isWeekend ? ` <b style="color:#fde047;">🔥[2x WEEKEND]</b>` : '';
+  const modeMsg = autoClimbEnabled
+    ? `Advancing to Floor ${farmingFloor}...`
+    : `Farming Floor ${farmingFloor} (Max: F${hero.towerFloor})...`;
+  resBox.innerHTML = `<span style="color:#38bdf8;">⚔️ +${expGain.toLocaleString()} EXP${weekendTag}! ${modeMsg}</span>`;
+
+  resetCombatRound();
+  renderAll();
+}
 
   function toggleIdlePause() {
     idlePaused = !idlePaused;
