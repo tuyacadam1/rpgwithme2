@@ -1723,12 +1723,35 @@ function getFloorDropRatesClient(floor) {
           hero.avatar.pitySecret = json.data.avatar.pitySecret;
           hero.avatar.pityDivine = json.data.avatar.pityDivine;
         }
+        // Apply server auto-equipped upgrades if any slot gained higher CP
+        if (json.data.equipped) {
+          VALID_GEAR_SLOTS.forEach(slot => {
+            const srvEq = json.data.equipped[slot];
+            const locEq = hero.equipped[slot];
+            if (srvEq && (!locEq || Number(srvEq.power) > Number(locEq.power))) {
+              hero.equipped[slot] = srvEq;
+            }
+          });
+        }
         queuedSync = true;
       }
 
       enforceClientIntegrity();
       resetCombatRound();
       renderAll();
+
+      if (json.data.newDrops && json.data.newDrops.length > 0) {
+        const best = json.data.newDrops.reduce((a, b) => (Number(b.power) > Number(a.power) ? b : a));
+        const wasEquipped = VALID_GEAR_SLOTS.some(s => hero.equipped[s]?.id === best.id);
+        const tag = wasEquipped ? '⚡ AUTO-EQUIPPED' : '🗑️ Auto-Cleared';
+        document.getElementById('raid-result').innerHTML =
+          `<span style="color:#4ade80;">🎁 Drop: [${escHtml(best.rarity)}] ${escHtml(best.name)} (+${best.power}) • ${tag}</span>`;
+        if (wasEquipped) {
+          showToast(`⚡ Auto-Equipped [${best.rarity}] ${best.name} (+${best.power * 10} CP)!`, "#10b981", 2800);
+        }
+      } else if (isManual) {
+        showToast("✅ Synced!", "#10b981", 1800);
+      }
 
       if (json.data.newDrops && json.data.newDrops.length > 0) {
         const best = json.data.newDrops[json.data.newDrops.length - 1];
