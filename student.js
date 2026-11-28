@@ -1683,6 +1683,7 @@
     try {
       const payload = JSON.stringify(buildSaveStatePayloadObj());
       hasUnsaved = false;
+      pendingFloorClears = 0;
       fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
